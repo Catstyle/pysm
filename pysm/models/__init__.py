@@ -8,10 +8,10 @@ from pysm.errors import InvalidStateTransition
 
 class State(object):
 
-    def enter(self, from_state):
+    def enter_state(self, from_state):
         raise NotImplementedError
 
-    def exit(self, to_state):
+    def exit_state(self, to_state):
         raise NotImplementedError
 
     def __eq__(self, other):
@@ -54,18 +54,18 @@ class Event(object):
         self.__switch__(instance, current_state, self.to_state)
 
     def __switch__(self, instance, from_state, to_state):
-        from_state.exit(instance, to_state)
+        from_state.exit_state(instance, to_state)
         instance.__class__ = instance.current_state = to_state
         instance._adaptor.update(instance, to_state.name)
-        to_state.enter(instance, from_state)
+        to_state.enter_state(instance, from_state)
 
 
 class Whatever(State):
 
     name = 'Whatever'
 
-    def enter(self, from_state):
+    def enter_state(self, from_state):
         pass
 
-    def exit(self, to_state):
+    def exit_state(self, to_state):
         pass
