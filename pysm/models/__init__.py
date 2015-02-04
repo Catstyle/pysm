@@ -6,7 +6,18 @@ except NameError:
 from pysm.errors import InvalidStateTransition
 
 
+class StateMeta(type):
+
+    def __eq__(self, other):
+        return other is WhateverState or self is other
+
+    def __ne__(self, other):
+        return not self == other
+
+
 class State(object):
+
+    __metaclass__ = StateMeta
 
     def enter_state(self, from_state):
         raise NotImplementedError
@@ -26,16 +37,35 @@ class State(object):
         return not self == other
 
 
+class WhateverState(State):
+
+    name = 'WhateverState'
+
+    def enter_state(self, from_state):
+        pass
+
+    def exit_state(self, to_state):
+        pass
+
+
 class Event(object):
 
     def __init__(self, from_states, to_state):
         assert from_states
         assert to_state
         self.to_state = to_state
+        self.from_states = from_states
+
+    @property
+    def from_states(self):
+        return self._from_states
+    
+    @from_states.setter
+    def from_states(self, from_states):
         if isinstance(from_states, (tuple, list)):
-            self.from_states = tuple(from_states)
+            self._from_states = tuple(from_states)
         else:
-            self.from_states = (from_states,)
+            self._from_states = (from_states,)
 
     def __get__(self, instance, owner):
         self.instance, self.owner = instance, owner
@@ -60,12 +90,9 @@ class Event(object):
         to_state.enter_state(instance, from_state)
 
 
-class Whatever(State):
+class RestoreEvent(Event):
 
-    name = 'Whatever'
-
-    def enter_state(self, from_state):
-        pass
-
-    def exit_state(self, to_state):
-        pass
+    def __call__(self):
+        restore_event = getattr(self.instance, 'restore_from_' + self.name)
+        restore_event.to_state = self.instance.current_state
+        return super(RestoreEvent, self).__call__()

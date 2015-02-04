@@ -2,7 +2,7 @@ from __future__ import absolute_import
 import inspect
 import inflection
 
-from pysm.models import Event, State
+from pysm.models import Event, RestoreEvent, State, WhateverState
 
 
 def is_state_builder(state):
@@ -18,24 +18,22 @@ class BaseAdaptor(object):
         return inspect.getmembers(original_class)
 
     @classmethod
+    def _new_state_class(cls, original_class, state):
+        state_dict = {}
+        state_dict.update(original_class.__dict__)
+        state_dict.update(state.__dict__)
+        return type(state.__name__, (State, original_class), state_dict)
+
+    @classmethod
     def process_states(cls, original_class):
         states, initial_state, is_method_dict,  = {}, None, {}
         for name, state in cls.get_class_members(original_class):
             if not (inspect.isclass(state) and issubclass(state, State)):
                 continue
 
-            state_dict = {}
-            state_name = state.__name__
-            state_dict.update(original_class.__dict__)
-            state_dict.update(state.__dict__)
-            state = type(
-                state_name,
-                (State, original_class) + original_class.__bases__,
-                state_dict
-            )
+            state = cls._new_state_class(original_class, state)
             state.name = name
-
-            states[state_name] = state
+            states[state.__name__] = state
             if getattr(state, 'initial', False):
                 if initial_state is not None:
                     raise ValueError("multiple initial states!")
@@ -43,6 +41,9 @@ class BaseAdaptor(object):
 
             is_state_string = "is_" + inflection.underscore(name)
             is_method_dict[is_state_string] = is_state_builder(state)
+
+        # placeholder state
+        states[WhateverState.__name__] = WhateverState
 
         assert initial_state, 'missing initial state'
         return states, initial_state, is_method_dict
@@ -59,13 +60,20 @@ class BaseAdaptor(object):
             event.from_states = tuple(from_states)
             event.to_state = states[event.to_state.__name__]
 
+            if isinstance(event, RestoreEvent):
+                restore_name = 'restore_from_' + name
+                restore_event = Event(
+                    from_states=event.to_state,
+                    to_state=states[WhateverState.__name__]
+                )
+                setattr(original_class, restore_name, restore_event)
+
     @classmethod
     def _process_class(cls, original_class):
         class_dict = {}
 
         # Get states
         states, initial_state, is_method_dict = cls.process_states(original_class)
-        class_dict.update(original_class.__dict__)
         class_dict.update(is_method_dict)
         class_dict.update(cls.extra_class_members(initial_state))
         class_dict.update(states)
@@ -73,8 +81,9 @@ class BaseAdaptor(object):
         # Get events
         cls.process_events(original_class, states)
 
+        original_init = original_class.__init__
         def new_init(self, *args, **kwargs):
-            original_class.__init__(self, *args, **kwargs)
+            original_init(self, *args, **kwargs)
             self.__class__ = self.current_state = initial_state
         class_dict['__init__'] = new_init
 
@@ -84,7 +93,9 @@ class BaseAdaptor(object):
     def process_class(cls, original_class):
         original_class._adaptor = cls
         class_dict = cls._process_class(original_class)
-        return type(original_class.__name__, original_class.__bases__, class_dict)
+        for key, value in class_dict.items():
+            setattr(original_class, key, value)
+        return original_class
 
     @classmethod
     def extra_class_members(cls, initial_state):
@@ -93,3 +104,14 @@ class BaseAdaptor(object):
     @classmethod
     def update(cls, document, state_name):
         raise NotImplementedError
+
+
+class NullAdaptor(BaseAdaptor):
+
+    @classmethod
+    def extra_class_members(cls, initial_state):
+        return {}
+
+    @classmethod
+    def update(cls, instance, state_name):
+        instance.state_name = state_name

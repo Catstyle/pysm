@@ -10,7 +10,8 @@ from pysm.orm.base import BaseAdaptor
 
 class MongoAdaptor(BaseAdaptor):
 
-    def get_class_members(self, original_class):
+    @classmethod
+    def get_class_members(cls, original_class):
         # reimplementing inspect.getmembers to swallow ConnectionError
         results = []
         for key in dir(original_class):
@@ -22,7 +23,8 @@ class MongoAdaptor(BaseAdaptor):
         results.sort()
         return results
 
-    def extra_class_members(self, initial_state):
+    @classmethod
+    def extra_class_members(cls, initial_state):
         return {'state_name': mongoengine.StringField(default=initial_state.name)}
 
     @classmethod

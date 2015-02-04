@@ -1,4 +1,4 @@
-from pysm.models import Event, State, Whatever
+from pysm.models import Event, RestoreEvent, State, WhateverState
 from pysm.orm import get_adaptor
 from pysm.errors import InvalidStateTransition
 
