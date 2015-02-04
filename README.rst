@@ -168,9 +168,9 @@ All you need to do is have sqlalchemy manage your object. For example:
 Thank you
 ---------
 
-to `aasm`_ and ruby’s `state\_machine`_ and jtushman's `state\_machine`_ and
+to `aasm`_ and ruby’s `state\_machine`_ and jtushman's `jtushman/state\_machine`_ and
 all other state machines that I loved before
 
 .. _aasm: https://github.com/aasm/aasm
 .. _state\_machine: https://github.com/pluginaweek/state_machine
-.. _state\_machine: https://github.com/jtushman/state_machine
+.. _jtushman/state\_machine: https://github.com/jtushman/state_machine
