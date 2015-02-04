@@ -27,7 +27,7 @@ class State(object):
 
     def __eq__(self, other):
         if isinstance(other, string_type):
-            return self.__class__ == other.__class__
+            return self.__class__.__name__ == other
         elif isinstance(other, State):
             return self.__class__ == other.__class__
         else:

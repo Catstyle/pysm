@@ -22,7 +22,8 @@ class BaseAdaptor(object):
         state_dict = {}
         state_dict.update(original_class.__dict__)
         state_dict.update(state.__dict__)
-        return type(state.__name__, (State, original_class), state_dict)
+        meta = type(state.__name__, (type(state), type(original_class)), {})
+        return meta(state.__name__, (State, original_class), state_dict)
 
     @classmethod
     def process_states(cls, original_class):
