@@ -26,59 +26,57 @@ Basic Usage
 
     @pysm.state_machine
     class Person():
+
         name = 'Billy'
 
-        sleeping = State(initial=True)
-        running = State()
-        cleaning = State()
+        class Sleeping(pysm.State):
 
-        run = Event(from_states=sleeping, to_state=running)
-        cleanup = Event(from_states=running, to_state=cleaning)
-        sleep = Event(from_states=(running, cleaning), to_state=sleeping)
+            initial = True
 
-        @before('sleep')
-        def do_one_thing(self):
-            print "{} is sleepy".format(self.name)
+            def enter_state(self, from_state):
+                print 'enter state Sleeping from %s' % (Sleeping, from_state)
 
-        @before('sleep')
-        def do_another_thing(self):
-            print "{} is REALLY sleepy".format(self.name)
+            def exit_state(self, to_state):
+                print 'exit state Sleeping to %s' % (Sleeping, to_state)
 
-        @after('sleep')
-        def snore(self):
-            print "Zzzzzzzzzzzz"
+        class Running(pysm.State):
 
-        @after('sleep')
-        def big_snore(self):
-            print "Zzzzzzzzzzzzzzzzzzzzzz"
+            def enter_state(self, from_state):
+                print 'enter state Running from %s' % (Running, from_state)
+
+            def exit_state(self, to_state):
+                print 'exit state Running to %s' % (Running, to_state)
+
+        class Cleaning(pysm.State):
+
+            def enter_state(self, from_state):
+                print 'enter state Cleaning from %s' % (Cleaning, from_state)
+
+            def exit_state(self, to_state):
+                print 'exit state Cleaning to %s' % (Cleaning, to_state)
+
+        run = Event(from_states=Sleeping, to_state=Running)
+        cleanup = Event(from_states=Running, to_state=Cleaning)
+        sleep = Event(from_states=(Running, Cleaning), to_state=Sleeping)
+
 
     person = Person()
-    print person.current_state == Person.sleeping       # True
+    print person.current_state == Person.Sleeping       # True
     print person.is_sleeping                            # True
     print person.is_running                             # False
     person.run()
     print person.is_running                             # True
     person.sleep()
 
-    # Billy is sleepy
-    # Billy is REALLY sleepy
-    # Zzzzzzzzzzzz
-    # Zzzzzzzzzzzzzzzzzzzzzz
+    # exit state Sleeping to Running
+    # enter state Running from Sleeping
+    # exit state Running to Sleeping 
+    # enter state Sleeping from Running
 
     print person.is_sleeping                            # True
 
 Features
 --------
-
-Before / After Callback Decorators
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-You can add callback hooks that get executed before or after an event
-(see example above).
-
-*Important:* if the *before* event causes an exception or returns
-``False``, the state will not change (transition is blocked) and the
-*after* event will not be executed.
 
 Blocks invalid state transitions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -111,26 +109,26 @@ datastore.
 
                 initial = True
 
-                def enter(self, from_state):
+                def enter_state(self, from_state):
                     pass
 
-                def exit(self, to_state):
+                def exit_state(self, to_state):
                     pass
 
             class Running(pysm.State):
 
-                def enter(self, from_state):
+                def enter_state(self, from_state):
                     pass
 
-                def exit(self, to_state):
+                def exit_state(self, to_state):
                     pass
 
             class Cleaning(pysm.State):
 
-                def enter(self, from_state):
+                def enter_state(self, from_state):
                     pass
 
-                def exit(self, to_state):
+                def exit_state(self, to_state):
                     pass
 
             run = Event(from_states=Sleeping, to_state=Running)
@@ -170,10 +168,9 @@ All you need to do is have sqlalchemy manage your object. For example:
 Thank you
 ---------
 
-to `aasm`_ and ruby’s `state\_machine`_ and all other state machines
-that I loved before
+to `aasm`_ and ruby’s `state\_machine`_ and jtushman's `state\_machine`_ and
+all other state machines that I loved before
 
 .. _aasm: https://github.com/aasm/aasm
 .. _state\_machine: https://github.com/pluginaweek/state_machine
 .. _state\_machine: https://github.com/jtushman/state_machine
-
