@@ -14,6 +14,10 @@ class StateMeta(type):
     def __ne__(self, other):
         return not self == other
 
+    def __unicode__(self):
+        return self.name
+    __str__ = __unicode__
+
 
 class State(object):
 
