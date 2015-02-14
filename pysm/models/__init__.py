@@ -1,9 +1,11 @@
+import six
+from pysm.errors import InvalidStateTransition
+
+
 try:
     string_type = basestring
 except NameError:
     string_type = str
-
-from pysm.errors import InvalidStateTransition
 
 
 class StateMeta(type):
@@ -19,9 +21,8 @@ class StateMeta(type):
     __str__ = __unicode__
 
 
+@six.add_metaclass(StateMeta)
 class State(object):
-
-    __metaclass__ = StateMeta
 
     def enter_state(self, from_state):
         raise NotImplementedError
