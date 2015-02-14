@@ -1,3 +1,7 @@
+__version__ = '0.2.1'
+VERSION = tuple(map(int, __version__.split('.')))
+
+
 from pysm.models import Event, RestoreEvent, State, WhateverState
 from pysm.orm import get_adaptor
 from pysm.errors import InvalidStateTransition
