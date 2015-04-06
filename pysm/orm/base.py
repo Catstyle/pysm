@@ -18,23 +18,17 @@ class BaseAdaptor(object):
         return inspect.getmembers(original_class)
 
     @classmethod
-    def _new_state_class(cls, original_class, state):
-        state_dict = {}
-        state_dict.update(original_class.__dict__)
-        state_dict.update(state.__dict__)
-        meta = type(state.__name__, (type(state), type(original_class)), {})
-        return meta(state.__name__, (State, original_class), state_dict)
-
-    @classmethod
     def process_states(cls, original_class):
-        states, initial_state, is_method_dict,  = {}, None, {}
+        states, initial_state, is_method_dict = {}, None, {}
         for name, state in cls.get_class_members(original_class):
             if not (inspect.isclass(state) and issubclass(state, State)):
                 continue
 
-            state = cls._new_state_class(original_class, state)
-            state.name = name
-            states[state.__name__] = state
+            for method_name, method in state.__dict__.items():
+                if not method_name.startswith('_') and inspect.isfunction(method):
+                    setattr(state, method_name, staticmethod(method))
+
+            states[name] = state
             if getattr(state, 'initial', False):
                 if initial_state is not None:
                     raise ValueError("multiple initial states!")
@@ -50,7 +44,10 @@ class BaseAdaptor(object):
         return states, initial_state, is_method_dict
 
     @classmethod
-    def process_events(cls, original_class, states):
+    def process_events(cls, original_class, initial_state, states):
+        original_class.initial_event = Event(
+            from_states=(WhateverState), to_state=initial_state
+        )
         for name, event in cls.get_class_members(original_class):
             if not isinstance(event, Event):
                 continue
@@ -80,12 +77,14 @@ class BaseAdaptor(object):
         class_dict.update(states)
 
         # Get events
-        cls.process_events(original_class, states)
+        cls.process_events(original_class, initial_state, states)
 
         original_init = original_class.__init__
         def new_init(self, *args, **kwargs):
             original_init(self, *args, **kwargs)
-            self.__class__ = self.current_state = initial_state
+            self.current_state = WhateverState
+            self._origin_methods = {}
+            self.initial_event()
         class_dict['__init__'] = new_init
 
         return class_dict
