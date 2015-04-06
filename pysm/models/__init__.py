@@ -2,6 +2,7 @@ try:
     string_type = basestring
 except NameError:
     string_type = str
+import inspect
 
 from pysm.errors import InvalidStateTransition
 
@@ -14,8 +15,11 @@ class StateMeta(type):
     def __ne__(self, other):
         return not self == other
 
+    def __hash__(self):
+        return id(self.__name__)
+
     def __unicode__(self):
-        return self.name
+        return self.__name__
     __str__ = __unicode__
 
 
@@ -43,11 +47,11 @@ class State(object):
 
 class WhateverState(State):
 
-    name = 'WhateverState'
-
+    @staticmethod
     def enter_state(self, from_state):
         pass
 
+    @staticmethod
     def exit_state(self, to_state):
         pass
 
@@ -89,8 +93,16 @@ class Event(object):
 
     def __switch__(self, instance, from_state, to_state):
         from_state.exit_state(instance, to_state)
-        instance.__class__ = instance.current_state = to_state
-        instance._adaptor.update(instance, to_state.name)
+        for name, method in instance._origin_methods.items():
+            instance.__dict__[name] = method
+        instance._origin_methods.clear()
+        for name, method in to_state.__dict__.items():
+            if not name.startswith('_') and inspect.ismethod(method):
+                if name in instance.__dict__:
+                    instance._origin_methods[name] = getattr(instance, name)
+                instance.__dict__[name] = method
+        instance.current_state = to_state
+        instance._adaptor.update(instance, to_state.__name__)
         to_state.enter_state(instance, from_state)
 
 
