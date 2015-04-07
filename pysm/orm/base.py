@@ -2,7 +2,7 @@ from __future__ import absolute_import
 import inspect
 import inflection
 
-from pysm.models import Event, RestoreEvent, State, WhateverState
+from pysm.models import Event, RestoreEvent, State, WhateverState, attach_state
 
 
 def is_state_builder(state):
@@ -23,10 +23,6 @@ class BaseAdaptor(object):
         for name, state in cls.get_class_members(original_class):
             if not (inspect.isclass(state) and issubclass(state, State)):
                 continue
-
-            for method_name, method in state.__dict__.items():
-                if not method_name.startswith('_') and inspect.isfunction(method):
-                    setattr(state, method_name, staticmethod(method))
 
             states[name] = state
             if getattr(state, 'initial', False):
@@ -82,10 +78,11 @@ class BaseAdaptor(object):
         original_init = original_class.__init__
         def new_init(self, *args, **kwargs):
             original_init(self, *args, **kwargs)
-            self.current_state = WhateverState
-            self._origin_methods = {}
+            attach_state(self, WhateverState)
             self.initial_event()
         class_dict['__init__'] = new_init
+        class_dict['_origin_methods'] = {}
+        class_dict['_state_methods'] = set()
 
         return class_dict
 
