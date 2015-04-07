@@ -2,7 +2,8 @@ try:
     string_type = basestring
 except NameError:
     string_type = str
-import inspect
+from inspect import isfunction
+from functools import partial
 
 from pysm.errors import InvalidStateTransition
 
@@ -47,11 +48,9 @@ class State(object):
 
 class WhateverState(State):
 
-    @staticmethod
     def enter_state(self, from_state):
         pass
 
-    @staticmethod
     def exit_state(self, to_state):
         pass
 
@@ -92,18 +91,10 @@ class Event(object):
         self.__switch__(instance, current_state, self.to_state)
 
     def __switch__(self, instance, from_state, to_state):
-        from_state.exit_state(instance, to_state)
-        for name, method in instance._origin_methods.items():
-            instance.__dict__[name] = method
-        instance._origin_methods.clear()
-        for name, method in to_state.__dict__.items():
-            if not name.startswith('_') and inspect.ismethod(method):
-                if name in instance.__dict__:
-                    instance._origin_methods[name] = getattr(instance, name)
-                instance.__dict__[name] = method
-        instance.current_state = to_state
-        instance._adaptor.update(instance, to_state.__name__)
-        to_state.enter_state(instance, from_state)
+        instance.exit_state(to_state)
+        detach_state(instance)
+        attach_state(instance, to_state)
+        instance.enter_state(from_state)
 
 
 class RestoreEvent(Event):
@@ -112,3 +103,27 @@ class RestoreEvent(Event):
         restore_event = getattr(self.instance, 'restore_from_' + self.name)
         restore_event.to_state = self.instance.current_state
         return super(RestoreEvent, self).__call__()
+
+
+def attach_state(instance, state):
+    original_class = instance.__class__
+    for name, method in state.__dict__.items():
+        if not name.startswith('_') and isfunction(method):
+            if name in original_class.__dict__:
+                original_class._origin_methods[name] = original_class.__dict__[name]
+            setattr(original_class, name, partial(method, instance))
+            original_class._state_methods.add(name)
+    instance.current_state = state
+    instance._adaptor.update(instance, state.__name__)
+
+
+def detach_state(instance):
+    original_class, state = instance.__class__, instance.current_state
+    for name in original_class._state_methods:
+        delattr(original_class, name)
+    original_class._state_methods.clear()
+    for name, method in original_class._origin_methods.items():
+        setattr(original_class, name, method)
+    original_class._origin_methods.clear()
+    instance.current_state = None
+    return state
