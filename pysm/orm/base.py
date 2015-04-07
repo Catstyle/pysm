@@ -77,9 +77,9 @@ class BaseAdaptor(object):
 
         original_init = original_class.__init__
         def new_init(self, *args, **kwargs):
-            original_init(self, *args, **kwargs)
             attach_state(self, WhateverState)
             self.initial_event()
+            original_init(self, *args, **kwargs)
         class_dict['__init__'] = new_init
         class_dict['_origin_methods'] = {}
         class_dict['_state_methods'] = set()
