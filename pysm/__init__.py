@@ -1,10 +1,14 @@
-__version__ = '0.2.1'
+__all__ = [
+    'State', 'WhateverState', 'Event', 'RestoreEvent', 'InvalidStateTransition',
+    'state_machine'
+]
+
+__version__ = '0.3.0'
 VERSION = tuple(map(int, __version__.split('.')))
 
-
-from pysm.models import Event, RestoreEvent, State, WhateverState
-from pysm.orm import get_adaptor
-from pysm.errors import InvalidStateTransition
+from .models import Event, RestoreEvent, State, WhateverState
+from .orm import get_adaptor
+from .errors import InvalidStateTransition
 
 
 def state_machine(original_class):

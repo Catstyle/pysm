@@ -5,7 +5,7 @@ try:
 except ImportError as e:
     mongoengine = None
 
-from pysm.orm.base import BaseAdaptor
+from .base import BaseAdaptor
 
 
 class MongoAdaptor(BaseAdaptor):
@@ -25,7 +25,9 @@ class MongoAdaptor(BaseAdaptor):
 
     @classmethod
     def extra_class_members(cls, initial_state):
-        return {'state_name': mongoengine.StringField(default=initial_state.name)}
+        return {
+            'state_name': mongoengine.StringField(default=initial_state.__name__)
+        }
 
     @classmethod
     def update(cls, instance, state_name):

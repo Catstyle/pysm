@@ -6,7 +6,7 @@ try:
 except ImportError:
     sqlalchemy = None
 
-from pysm.orm.base import BaseAdaptor
+from .base import BaseAdaptor
 
 
 class SqlAlchemyAdaptor(BaseAdaptor):
@@ -19,17 +19,10 @@ class SqlAlchemyAdaptor(BaseAdaptor):
     def update(cls, instance, state_name):
         instance.state_name = state_name
 
-    @classmethod
-    def process_class(cls, original_class):
-        class_dict = cls._process_class(original_class)
-        for key, value in class_dict.items():
-            setattr(original_class, key, value)
-        return original_class
-
 
 def get_sqlalchemy_adaptor(original_class):
     if (sqlalchemy and
             hasattr(original_class, '_sa_class_manager') and
             isinstance(original_class._sa_class_manager, ClassManager)):
-        return SqlAlchemyAdaptor(original_class)
+        return SqlAlchemyAdaptor
     return None

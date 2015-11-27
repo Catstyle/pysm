@@ -1,13 +1,8 @@
 import six
-from pysm.errors import InvalidStateTransition
-
-
-try:
-    string_type = basestring
-except NameError:
-    string_type = str
 from inspect import isfunction
 from functools import partial
+
+from pysm.errors import InvalidStateTransition
 
 
 class StateMeta(type):
@@ -36,7 +31,7 @@ class State(object):
         raise NotImplementedError
 
     def __eq__(self, other):
-        if isinstance(other, string_type):
+        if isinstance(other, six.string_type):
             return self.__class__.__name__ == other
         elif isinstance(other, State):
             return self.__class__ == other.__class__
@@ -61,8 +56,8 @@ class Event(object):
     def __init__(self, from_states, to_state):
         assert from_states
         assert to_state
-        self.to_state = to_state
         self.from_states = from_states
+        self.to_state = to_state
 
     @property
     def from_states(self):
@@ -108,23 +103,24 @@ class RestoreEvent(Event):
 
 def attach_state(instance, state):
     original_class = instance.__class__
+    base_dict = original_class.__dict__
     for name, method in state.__dict__.items():
         if not name.startswith('_') and isfunction(method):
-            if name in original_class.__dict__:
-                original_class._origin_methods[name] = original_class.__dict__[name]
+            if name in base_dict:
+                original_class.__origin_methods[name] = base_dict[name]
             setattr(original_class, name, partial(method, instance))
-            original_class._state_methods.add(name)
+            original_class.__state_methods.add(name)
     instance.current_state = state
     instance._adaptor.update(instance, state.__name__)
 
 
 def detach_state(instance):
     original_class, state = instance.__class__, instance.current_state
-    for name in original_class._state_methods:
+    for name in original_class.__state_methods:
         delattr(original_class, name)
-    original_class._state_methods.clear()
-    for name, method in original_class._origin_methods.items():
+    original_class.__state_methods.clear()
+    for name, method in original_class.__origin_methods.items():
         setattr(original_class, name, method)
-    original_class._origin_methods.clear()
+    original_class.__origin_methods.clear()
     instance.current_state = None
     return state
