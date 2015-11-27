@@ -2,7 +2,7 @@ from __future__ import absolute_import
 import inspect
 import inflection
 
-from pysm.models import Event, RestoreEvent, State, WhateverState
+from pysm.models import Event, RestoreEvent, State, WhateverState, attach_state
 
 
 def is_state_builder(state):
@@ -14,27 +14,41 @@ def is_state_builder(state):
 class BaseAdaptor(object):
 
     @classmethod
+    def _process_class(cls, original_class):
+        class_dict = {}
+
+        # Get states
+        states, initial_state, is_method_dict = cls.process_states(original_class)
+        class_dict.update(is_method_dict)
+        class_dict.update(cls.extra_class_members(initial_state))
+        class_dict.update(states)
+
+        # Get events
+        cls.process_events(original_class, initial_state, states)
+
+        original_init = original_class.__init__
+        def new_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            attach_state(self, WhateverState)
+            self.initial_event()
+        class_dict['__init__'] = new_init
+        class_dict['__origin_methods'] = {}
+        class_dict['__state_methods'] = set()
+
+        return class_dict
+
+    @classmethod
     def get_class_members(cls, original_class):
         return inspect.getmembers(original_class)
 
     @classmethod
-    def _new_state_class(cls, original_class, state):
-        state_dict = {}
-        state_dict.update(original_class.__dict__)
-        state_dict.update(state.__dict__)
-        meta = type(state.__name__, (type(state), type(original_class)), {})
-        return meta(state.__name__, (State, original_class), state_dict)
-
-    @classmethod
     def process_states(cls, original_class):
-        states, initial_state, is_method_dict,  = {}, None, {}
+        states, initial_state, is_method_dict = {}, None, {}
         for name, state in cls.get_class_members(original_class):
             if not (inspect.isclass(state) and issubclass(state, State)):
                 continue
 
-            state = cls._new_state_class(original_class, state)
-            state.name = name
-            states[state.__name__] = state
+            states[name] = state
             if getattr(state, 'initial', False):
                 if initial_state is not None:
                     raise ValueError("multiple initial states!")
@@ -50,7 +64,10 @@ class BaseAdaptor(object):
         return states, initial_state, is_method_dict
 
     @classmethod
-    def process_events(cls, original_class, states):
+    def process_events(cls, original_class, initial_state, states):
+        original_class.initial_event = Event(
+            from_states=WhateverState, to_state=initial_state
+        )
         for name, event in cls.get_class_members(original_class):
             if not isinstance(event, Event):
                 continue
@@ -70,27 +87,6 @@ class BaseAdaptor(object):
                 setattr(original_class, restore_name, restore_event)
 
     @classmethod
-    def _process_class(cls, original_class):
-        class_dict = {}
-
-        # Get states
-        states, initial_state, is_method_dict = cls.process_states(original_class)
-        class_dict.update(is_method_dict)
-        class_dict.update(cls.extra_class_members(initial_state))
-        class_dict.update(states)
-
-        # Get events
-        cls.process_events(original_class, states)
-
-        original_init = original_class.__init__
-        def new_init(self, *args, **kwargs):
-            original_init(self, *args, **kwargs)
-            self.__class__ = self.current_state = initial_state
-        class_dict['__init__'] = new_init
-
-        return class_dict
-
-    @classmethod
     def process_class(cls, original_class):
         original_class._adaptor = cls
         class_dict = cls._process_class(original_class)
@@ -103,7 +99,7 @@ class BaseAdaptor(object):
         raise NotImplementedError
 
     @classmethod
-    def update(cls, document, state_name):
+    def update(cls, instance, state_name):
         raise NotImplementedError
 
 

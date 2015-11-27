@@ -1,11 +1,8 @@
 import six
+from inspect import isfunction
+from functools import partial
+
 from pysm.errors import InvalidStateTransition
-
-
-try:
-    string_type = basestring
-except NameError:
-    string_type = str
 
 
 class StateMeta(type):
@@ -16,8 +13,11 @@ class StateMeta(type):
     def __ne__(self, other):
         return not self == other
 
+    def __hash__(self):
+        return id(self.__name__)
+
     def __unicode__(self):
-        return self.name
+        return self.__name__
     __str__ = __unicode__
 
 
@@ -31,7 +31,7 @@ class State(object):
         raise NotImplementedError
 
     def __eq__(self, other):
-        if isinstance(other, string_type):
+        if isinstance(other, six.string_type):
             return self.__class__.__name__ == other
         elif isinstance(other, State):
             return self.__class__ == other.__class__
@@ -43,8 +43,6 @@ class State(object):
 
 
 class WhateverState(State):
-
-    name = 'WhateverState'
 
     def enter_state(self, from_state):
         pass
@@ -58,8 +56,8 @@ class Event(object):
     def __init__(self, from_states, to_state):
         assert from_states
         assert to_state
-        self.to_state = to_state
         self.from_states = from_states
+        self.to_state = to_state
 
     @property
     def from_states(self):
@@ -89,10 +87,10 @@ class Event(object):
         self.__switch__(instance, current_state, self.to_state)
 
     def __switch__(self, instance, from_state, to_state):
-        from_state.exit_state(instance, to_state)
-        instance.__class__ = instance.current_state = to_state
-        instance._adaptor.update(instance, to_state.name)
-        to_state.enter_state(instance, from_state)
+        instance.exit_state(to_state)
+        detach_state(instance)
+        attach_state(instance, to_state)
+        instance.enter_state(from_state)
 
 
 class RestoreEvent(Event):
@@ -101,3 +99,28 @@ class RestoreEvent(Event):
         restore_event = getattr(self.instance, 'restore_from_' + self.name)
         restore_event.to_state = self.instance.current_state
         return super(RestoreEvent, self).__call__()
+
+
+def attach_state(instance, state):
+    original_class = instance.__class__
+    base_dict = original_class.__dict__
+    for name, method in state.__dict__.items():
+        if not name.startswith('_') and isfunction(method):
+            if name in base_dict:
+                original_class.__origin_methods[name] = base_dict[name]
+            setattr(original_class, name, partial(method, instance))
+            original_class.__state_methods.add(name)
+    instance.current_state = state
+    instance._adaptor.update(instance, state.__name__)
+
+
+def detach_state(instance):
+    original_class, state = instance.__class__, instance.current_state
+    for name in original_class.__state_methods:
+        delattr(original_class, name)
+    original_class.__state_methods.clear()
+    for name, method in original_class.__origin_methods.items():
+        setattr(original_class, name, method)
+    original_class.__origin_methods.clear()
+    instance.current_state = None
+    return state
