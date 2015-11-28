@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 
-from pysm.orm.base import NullAdaptor
-from pysm.orm.mongoengine import get_mongo_adaptor
-from pysm.orm.sqlalchemy import get_sqlalchemy_adaptor
+from .base import NullAdaptor
+from .mongoengine import get_mongo_adaptor
+from .sqlalchemy import get_sqlalchemy_adaptor
 
 _adaptors = [get_mongo_adaptor, get_sqlalchemy_adaptor]
 
