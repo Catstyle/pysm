@@ -80,8 +80,8 @@ class Event(object):
         current_state = self.instance.current_state
         if current_state not in self.from_states:
             raise InvalidStateTransition(
-                'calling `%s` from state `%s`, valid states `%s`' % (
-                    self.name, current_state, self.from_states
+                '%s: calling `%s` from state `%s`, valid states `%s`' % (
+                    instance, self.name, current_state, self.from_states
                 )
             )
         self.__switch__(instance, current_state, self.to_state)

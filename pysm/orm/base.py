@@ -28,9 +28,8 @@ class BaseAdaptor(object):
 
         original_init = original_class.__init__
         def new_init(self, *args, **kwargs):
+            attach_state(self, initial_state)
             original_init(self, *args, **kwargs)
-            attach_state(self, WhateverState)
-            self.initial_event()
         class_dict['__init__'] = new_init
         class_dict['__origin_methods'] = {}
         class_dict['__state_methods'] = set()
@@ -65,9 +64,6 @@ class BaseAdaptor(object):
 
     @classmethod
     def process_events(cls, original_class, initial_state, states):
-        original_class.initial_event = Event(
-            from_states=WhateverState, to_state=initial_state
-        )
         for name, event in cls.get_class_members(original_class):
             if not isinstance(event, Event):
                 continue
