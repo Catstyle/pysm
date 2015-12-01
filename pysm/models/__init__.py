@@ -71,7 +71,7 @@ class Event(object):
             self._from_states = (from_states,)
 
     def __get__(self, instance, owner):
-        def switch():
+        def switch(*args, **kwargs):
             current_state = instance.current_state
             if current_state not in self.from_states:
                 raise InvalidStateTransition(
@@ -79,14 +79,8 @@ class Event(object):
                         instance, self.name, current_state, self.from_states
                     )
                 )
-            self.__switch__(instance, current_state, self.to_state)
+            switch_state(instance, current_state, self.to_state, *args, **kwargs)
         return switch
-
-    def __switch__(self, instance, from_state, to_state):
-        instance.exit_state(to_state)
-        detach_state(instance)
-        attach_state(instance, to_state)
-        instance.enter_state(from_state)
 
     def __str__(self):
         return u'pysm-event|%s' % self.name
@@ -95,10 +89,14 @@ class Event(object):
 
 class RestoreEvent(Event):
 
-    def __call__(self):
+    def __get__(self):
         restore_event = getattr(self.instance, 'restore_from_' + self.name)
         restore_event.to_state = self.instance.current_state
-        return super(RestoreEvent, self).__call__()
+        return super(RestoreEvent, self).__get__()
+
+    def __str__(self):
+        return u'pysm-restoreevent|%s' % self.name
+    __unicode__ = __repr__ = __str__
 
 
 def attach_state(instance, state):
@@ -123,3 +121,9 @@ def detach_state(instance):
     instance._pysm_origin_methods.clear()
     instance.current_state = None
     return state
+
+def switch_state(instance, from_state, to_state, *args, **kwargs):
+    instance.exit_state(to_state)
+    detach_state(instance)
+    attach_state(instance, to_state)
+    instance.enter_state(from_state, *args, **kwargs)
