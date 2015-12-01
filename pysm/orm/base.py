@@ -28,11 +28,11 @@ class BaseAdaptor(object):
 
         original_init = original_class.__init__
         def new_init(self, *args, **kwargs):
+            self._pysm_origin_methods = {}
+            self._pysm_state_methods = set()
             attach_state(self, initial_state)
             original_init(self, *args, **kwargs)
         class_dict['__init__'] = new_init
-        class_dict['__origin_methods'] = {}
-        class_dict['__state_methods'] = set()
 
         return class_dict
 

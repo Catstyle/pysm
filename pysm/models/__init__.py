@@ -71,26 +71,26 @@ class Event(object):
             self._from_states = (from_states,)
 
     def __get__(self, instance, owner):
-        self.instance, self.owner = instance, owner
-        return self
-
-    def __call__(self):
-        #assert current state
-        instance = self.instance
-        current_state = self.instance.current_state
-        if current_state not in self.from_states:
-            raise InvalidStateTransition(
-                '%s: calling `%s` from state `%s`, valid states `%s`' % (
-                    instance, self.name, current_state, self.from_states
+        def switch():
+            current_state = instance.current_state
+            if current_state not in self.from_states:
+                raise InvalidStateTransition(
+                    '%s: calling `%s` from state `%s`, valid states `%s`' % (
+                        instance, self.name, current_state, self.from_states
+                    )
                 )
-            )
-        self.__switch__(instance, current_state, self.to_state)
+            self.__switch__(instance, current_state, self.to_state)
+        return switch
 
     def __switch__(self, instance, from_state, to_state):
         instance.exit_state(to_state)
         detach_state(instance)
         attach_state(instance, to_state)
         instance.enter_state(from_state)
+
+    def __str__(self):
+        return u'pysm-event|%s' % self.name
+    __unicode__ = __repr__ = __str__
 
 
 class RestoreEvent(Event):
@@ -102,25 +102,24 @@ class RestoreEvent(Event):
 
 
 def attach_state(instance, state):
-    original_class = instance.__class__
-    base_dict = original_class.__dict__
+    base_dict = instance.__class__.__dict__
     for name, method in state.__dict__.items():
         if not name.startswith('_') and isfunction(method):
             if name in base_dict:
-                original_class.__origin_methods[name] = base_dict[name]
-            setattr(original_class, name, partial(method, instance))
-            original_class.__state_methods.add(name)
+                instance._pysm_origin_methods[name] = base_dict[name]
+            setattr(instance, name, partial(method, instance))
+            instance._pysm_state_methods.add(name)
     instance.current_state = state
     instance._adaptor.update(instance, state.__name__)
 
 
 def detach_state(instance):
-    original_class, state = instance.__class__, instance.current_state
-    for name in original_class.__state_methods:
-        delattr(original_class, name)
-    original_class.__state_methods.clear()
-    for name, method in original_class.__origin_methods.items():
-        setattr(original_class, name, method)
-    original_class.__origin_methods.clear()
+    state = instance.current_state
+    for name in instance._pysm_state_methods:
+        delattr(instance, name)
+    instance._pysm_state_methods.clear()
+    for name, method in instance._pysm_origin_methods.items():
+        setattr(instance, name, partial(method, instance))
+    instance._pysm_origin_methods.clear()
     instance.current_state = None
     return state
