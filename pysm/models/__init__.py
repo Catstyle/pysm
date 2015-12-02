@@ -71,6 +71,8 @@ class Event(object):
             self._from_states = (from_states,)
 
     def __get__(self, instance, owner):
+        if not instance:
+            return self
         def switch(*args, **kwargs):
             current_state = instance.current_state
             if current_state not in self.from_states:
