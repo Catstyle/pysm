@@ -1,2 +1,0 @@
-class InvalidStateTransition(Exception):
-    pass

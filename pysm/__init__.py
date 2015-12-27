@@ -3,14 +3,8 @@ __all__ = [
     'state_machine'
 ]
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 VERSION = tuple(map(int, __version__.split('.')))
 
-from .models import Event, RestoreEvent, State, WhateverState
-from .orm import get_adaptor
-from .errors import InvalidStateTransition
-
-
-def state_machine(original_class):
-    adaptor = get_adaptor(original_class)
-    return adaptor.process_class(original_class)
+from .state import State, WhateverState, state_machine
+from .event import Event, RestoreEvent, InvalidStateTransition
