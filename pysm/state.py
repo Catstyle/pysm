@@ -16,7 +16,6 @@ class StateMeta(type):
         for name, value in attrs.items():
             if not name.startswith('_') and inspect.isfunction(value):
                 cls.state_methods[name] = value
-        del cls.state_methods['enter_state'], cls.state_methods['exit_state']
         return cls
 
     def __eq__(self, other):
