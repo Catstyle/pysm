@@ -58,21 +58,21 @@ class WhateverState(State):
 
 
 def state_machine(original_class):
-    initial_state = process_states(original_class)
+    process_states(original_class)
     process_events(original_class)
 
     original_init = original_class.__init__
     def new_init(self, *args, **kwargs):
         self._pysm_origin_methods = {}
         self._pysm_state_methods = set()
-        attach_state(self, initial_state)
+        attach_state(self, self._pysm_initial_state)
         original_init(self, *args, **kwargs)
     original_class.__init__ = new_init
     return original_class
 
 
 def process_states(original_class):
-    initial_state = None
+    original_class._pysm_initial_state = None
     original_class._pysm_states = {}
     for name, value in inspect.getmembers(original_class):
         if not (inspect.isclass(value) and issubclass(value, State)):
@@ -82,19 +82,21 @@ def process_states(original_class):
 
         original_class._pysm_states[name] = value
         if getattr(value, 'initial', False):
-            if initial_state is not None:
+            if original_class._pysm_initial_state is not None:
                 raise ValueError("multiple initial states!")
-            initial_state = original_class._pysm_initial_state = value
+            original_class._pysm_initial_state = value
 
-    assert initial_state, 'missing initial state'
-    return initial_state
+    if original_class._pysm_initial_state is None:
+        raise ValueError('missing initial state')
 
 
 def process_events(original_class):
+    original_class._pysm_events = {}
     for name, value in inspect.getmembers(original_class):
         if not isinstance(value, Event):
             continue
         value.name = name
+        original_class._pysm_events[name] = value
 
         if isinstance(value, RestoreEvent):
             restore_name = 'restore_from_' + name
@@ -103,3 +105,4 @@ def process_events(original_class):
             )
             restore_event.name = restore_name
             setattr(original_class, restore_name, restore_event)
+            original_class._pysm_events[restore_name] = restore_event

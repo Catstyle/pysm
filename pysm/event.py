@@ -1,7 +1,7 @@
 from functools import partial
 
 
-class InvalidStateTransition(Exception):
+class InvalidTransition(Exception):
     pass
 
 
@@ -20,7 +20,7 @@ class Event(object):
         def switch(*args, **kwargs):
             current_state = instance.current_state
             if current_state not in self.from_states:
-                raise InvalidStateTransition(
+                raise InvalidTransition(
                     '%s: calling `%s` from state `%s`, valid states `%s`' % (
                         instance, self.name, current_state, self.from_states
                     )
