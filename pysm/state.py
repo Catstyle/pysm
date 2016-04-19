@@ -73,7 +73,7 @@ def state_machine(original_class):
 
 def process_states(original_class):
     original_class._pysm_initial_state = None
-    original_class._pysm_states = {}
+    original_class._pysm_states = {'WhateverState': WhateverState}
     for name, value in inspect.getmembers(original_class):
         if not (inspect.isclass(value) and issubclass(value, State)):
             continue
@@ -88,6 +88,7 @@ def process_states(original_class):
 
     if original_class._pysm_initial_state is None:
         raise ValueError('missing initial state')
+    original_class.WhateverState = WhateverState
 
 
 def process_events(original_class):

@@ -36,8 +36,10 @@ class Event(object):
 class RestoreEvent(Event):
 
     def __get__(self, instance, owner):
-        restore_event = getattr(self.instance, 'restore_from_' + self.name)
-        restore_event.to_state = self.instance.current_state
+        if not instance:
+            return self
+        restore_event = getattr(instance, 'restore_from_' + self.name)
+        restore_event.to_state = instance.current_state
         return super(RestoreEvent, self).__get__(instance, owner)
 
     def __str__(self):
