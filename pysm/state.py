@@ -63,7 +63,6 @@ def state_machine(original_class):
 
     original_init = original_class.__init__
     def new_init(self, *args, **kwargs):
-        self._pysm_origin_methods = {}
         self._pysm_state_methods = set()
         attach_state(self, self._pysm_initial_state)
         original_init(self, *args, **kwargs)

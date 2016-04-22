@@ -48,22 +48,18 @@ class RestoreEvent(Event):
 
 
 def attach_state(instance, state):
-    base_dict = instance.__class__.__dict__
+    base_dict = instance.__dict__
     for name, method in state.state_methods.items():
-        if name in base_dict:
-            instance._pysm_origin_methods[name] = base_dict[name]
-        setattr(instance, name, partial(method, instance))
+        base_dict[name] = partial(method, instance)
         instance._pysm_state_methods.add(name)
     instance.current_state = state
 
 
 def detach_state(instance):
+    base_dict = instance.__dict__
     for name in instance._pysm_state_methods:
-        delattr(instance, name)
+        base_dict.pop(name, None)
     instance._pysm_state_methods.clear()
-    for name, method in instance._pysm_origin_methods.items():
-        setattr(instance, name, partial(method, instance))
-    instance._pysm_origin_methods.clear()
     instance.current_state = None
 
 
