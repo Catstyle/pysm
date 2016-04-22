@@ -48,6 +48,7 @@ class RestoreEvent(Event):
 
 
 def attach_state(instance, state):
+    assert instance.current_state is None
     base_dict = instance.__dict__
     for name, method in state.state_methods.items():
         base_dict[name] = partial(method, instance)
@@ -56,6 +57,7 @@ def attach_state(instance, state):
 
 
 def detach_state(instance):
+    assert instance.current_state
     base_dict = instance.__dict__
     for name in instance._pysm_state_methods:
         base_dict.pop(name, None)
@@ -66,5 +68,6 @@ def detach_state(instance):
 def switch_state(instance, from_state, to_state, *args, **kwargs):
     instance.exit_state(to_state)
     detach_state(instance)
+    instance._pysm_previous_state = from_state
     attach_state(instance, to_state)
     instance.enter_state(from_state, *args, **kwargs)
