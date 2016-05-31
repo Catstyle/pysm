@@ -36,8 +36,10 @@ class Event(object):
 class RestoreEvent(Event):
 
     def __get__(self, instance, owner):
-        restore_event = getattr(self.instance, 'restore_from_' + self.name)
-        restore_event.to_state = self.instance.current_state
+        if not instance:
+            return self
+        restore_event = getattr(instance, 'restore_from_' + self.name)
+        restore_event.to_state = instance.current_state
         return super(RestoreEvent, self).__get__(instance, owner)
 
     def __str__(self):
@@ -46,27 +48,26 @@ class RestoreEvent(Event):
 
 
 def attach_state(instance, state):
-    base_dict = instance.__class__.__dict__
+    assert instance.current_state is None
+    base_dict = instance.__dict__
     for name, method in state.state_methods.items():
-        if name in base_dict:
-            instance._pysm_origin_methods[name] = base_dict[name]
-        setattr(instance, name, partial(method, instance))
+        base_dict[name] = partial(method, instance)
         instance._pysm_state_methods.add(name)
     instance.current_state = state
 
 
 def detach_state(instance):
+    assert instance.current_state
+    base_dict = instance.__dict__
     for name in instance._pysm_state_methods:
-        delattr(instance, name)
+        base_dict.pop(name, None)
     instance._pysm_state_methods.clear()
-    for name, method in instance._pysm_origin_methods.items():
-        setattr(instance, name, partial(method, instance))
-    instance._pysm_origin_methods.clear()
     instance.current_state = None
 
 
 def switch_state(instance, from_state, to_state, *args, **kwargs):
     instance.exit_state(to_state)
     detach_state(instance)
+    instance._pysm_previous_state = from_state
     attach_state(instance, to_state)
     instance.enter_state(from_state, *args, **kwargs)

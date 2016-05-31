@@ -11,10 +11,10 @@ class StateMeta(type):
         cls.state_methods = {}
         for base in bases:
             for name, value in base.__dict__.items():
-                if not name.startswith('_') and inspect.isfunction(value):
+                if not name.startswith('__') and inspect.isfunction(value):
                     cls.state_methods[name] = value
         for name, value in attrs.items():
-            if not name.startswith('_') and inspect.isfunction(value):
+            if not name.startswith('__') and inspect.isfunction(value):
                 cls.state_methods[name] = value
         return cls
 
@@ -63,8 +63,9 @@ def state_machine(original_class):
 
     original_init = original_class.__init__
     def new_init(self, *args, **kwargs):
-        self._pysm_origin_methods = {}
         self._pysm_state_methods = set()
+        self._pysm_previous_state = None
+        self.current_state = None
         attach_state(self, self._pysm_initial_state)
         original_init(self, *args, **kwargs)
     original_class.__init__ = new_init
