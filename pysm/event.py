@@ -1,8 +1,4 @@
-from functools import partial
-
-
-class InvalidTransition(Exception):
-    pass
+from .error import InvalidTransition
 
 
 class Event(object):
@@ -17,6 +13,7 @@ class Event(object):
     def __get__(self, instance, owner):
         if not instance:
             return self
+
         def switch(*args, **kwargs):
             current_state = instance.current_state
             if current_state not in self.from_states:
@@ -25,7 +22,9 @@ class Event(object):
                         instance, self.name, current_state, self.from_states
                     )
                 )
-            switch_state(instance, current_state, self.to_state, *args, **kwargs)
+            switch_state(
+                instance, current_state, self.to_state, *args, **kwargs
+            )
         return switch
 
     def __str__(self):
@@ -47,27 +46,4 @@ class RestoreEvent(Event):
     __unicode__ = __repr__ = __str__
 
 
-def attach_state(instance, state):
-    assert instance.current_state is None
-    base_dict = instance.__dict__
-    for name, method in state.state_methods.items():
-        base_dict[name] = partial(method, instance)
-        instance._pysm_state_methods.add(name)
-    instance.current_state = state
-
-
-def detach_state(instance):
-    assert instance.current_state
-    base_dict = instance.__dict__
-    for name in instance._pysm_state_methods:
-        base_dict.pop(name, None)
-    instance._pysm_state_methods.clear()
-    instance.current_state = None
-
-
-def switch_state(instance, from_state, to_state, *args, **kwargs):
-    instance.exit_state(to_state)
-    detach_state(instance)
-    instance._pysm_previous_state = from_state
-    attach_state(instance, to_state)
-    instance.enter_state(from_state, *args, **kwargs)
+from .handler import switch_state  # noqa

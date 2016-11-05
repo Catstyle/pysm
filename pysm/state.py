@@ -1,8 +1,6 @@
 import inspect
 from six import add_metaclass, string_types
 
-from .event import Event, RestoreEvent, attach_state
-
 
 class StateMeta(type):
 
@@ -55,55 +53,3 @@ class State(object):
 
 class WhateverState(State):
     pass
-
-
-def state_machine(original_class):
-    process_states(original_class)
-    process_events(original_class)
-
-    original_init = original_class.__init__
-    def new_init(self, *args, **kwargs):
-        self._pysm_state_methods = set()
-        self._pysm_previous_state = None
-        self.current_state = None
-        attach_state(self, self._pysm_initial_state)
-        original_init(self, *args, **kwargs)
-    original_class.__init__ = new_init
-    return original_class
-
-
-def process_states(original_class):
-    original_class._pysm_initial_state = None
-    original_class._pysm_states = {}
-    for name, value in inspect.getmembers(original_class):
-        if not (inspect.isclass(value) and issubclass(value, State)):
-            continue
-        if issubclass(value, WhateverState):
-            raise TypeError('cannot inherit from WhateverState')
-
-        original_class._pysm_states[name] = value
-        if getattr(value, 'initial', False):
-            if original_class._pysm_initial_state is not None:
-                raise ValueError("multiple initial states!")
-            original_class._pysm_initial_state = value
-
-    if original_class._pysm_initial_state is None:
-        raise ValueError('missing initial state')
-
-
-def process_events(original_class):
-    original_class._pysm_events = {}
-    for name, value in inspect.getmembers(original_class):
-        if not isinstance(value, Event):
-            continue
-        value.name = name
-        original_class._pysm_events[name] = value
-
-        if isinstance(value, RestoreEvent):
-            restore_name = 'restore_from_' + name
-            restore_event = Event(
-                from_states=value.to_state, to_state=WhateverState
-            )
-            restore_event.name = restore_name
-            setattr(original_class, restore_name, restore_event)
-            original_class._pysm_events[restore_name] = restore_event
