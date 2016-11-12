@@ -8,3 +8,7 @@ class InvalidTransition(PysmError):
 
 class InvalidEventState(PysmError):
     pass
+
+
+class HasNoState(PysmError):
+    pass

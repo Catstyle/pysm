@@ -1,4 +1,4 @@
-from .error import InvalidTransition
+from .error import InvalidTransition, HasNoState
 
 
 class Event(object):
@@ -16,15 +16,17 @@ class Event(object):
 
         def switch(*args, **kwargs):
             current_state = instance.current_state
-            if current_state not in self.from_states:
+            current_name = current_state.__name__
+            if current_name not in self.from_states:
                 raise InvalidTransition(
                     '%s: calling `%s` from state `%s`, valid states `%s`' % (
-                        instance, self.name, current_state, self.from_states
+                        instance, self.name, current_name, self.from_states
                     )
                 )
-            switch_state(
-                instance, current_state, self.to_state, *args, **kwargs
-            )
+            to_state = instance._pysm_states.get(self.to_state)
+            if not to_state:
+                raise HasNoState(self.to_state)
+            switch_state(instance, current_state, to_state, *args, **kwargs)
         return switch
 
     def __str__(self):
@@ -38,7 +40,7 @@ class RestoreEvent(Event):
         if not instance:
             return self
         restore_event = getattr(instance, 'restore_from_' + self.name)
-        restore_event.to_state = instance.current_state
+        restore_event.to_state = instance.current_state.__name__
         return super(RestoreEvent, self).__get__(instance, owner)
 
     def __str__(self):
