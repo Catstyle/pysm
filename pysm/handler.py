@@ -2,7 +2,7 @@ import inspect
 from functools import partial
 
 from .state import State, WhateverState
-from .event import Event, RestoreEvent
+from .event import PysmEvent, Event, InstanceEvent, RestoreEvent
 from .error import InvalidEventState
 
 
@@ -10,7 +10,9 @@ def validate_event_states(original_class, event):
     for state_name in event.from_states + (event.to_state,):
         state = original_class._pysm_states.get(state_name)
         if not inspect.isclass(state) or not issubclass(state, State):
-            raise InvalidEventState('%s is not inherit from `State`' % state)
+            raise InvalidEventState(
+                '%s, %s is not inherit from `State`' % (state_name, state)
+            )
 
 
 def attach_state(instance, state):
@@ -78,8 +80,8 @@ def register_event_to_instance(instance, name, event):
     if inspect.isclass(instance):
         raise ValueError('cannot register event to non instance object, '
                          'call register_event_to_class instead')
-    if not isinstance(event, Event):
-        raise ValueError('event is not a valid Event')
+    if not isinstance(event, InstanceEvent):
+        raise ValueError('event is not a valid InstanceEvent')
     if not getattr(instance, 'initiated_pysm', False):
         raise TypeError('instance object is not a valid pysm state machine')
 
@@ -87,6 +89,7 @@ def register_event_to_instance(instance, name, event):
         raise TypeError('instance already has event: %s' % name)
     if '_pysm_events' not in instance.__dict__:
         instance.__dict__['_pysm_events'] = instance._pysm_events.copy()
+    event.name = name
     instance.__dict__[name] = event
     instance._pysm_events[name] = event
 
@@ -95,13 +98,14 @@ def register_event_to_class(clz, name, event, force=False):
     if not inspect.isclass(clz):
         raise ValueError('cannot register event to non class object, '
                          'call register_event_to_instance instead')
-    if not isinstance(event, Event):
-        raise ValueError('event is not a valid Event')
+    if not isinstance(event, PysmEvent):
+        raise ValueError('event is not a valid PysmEvent')
     if not getattr(clz, 'initiated_pysm', False):
         raise TypeError('clz object is not a valid pysm state machine')
 
     if name in clz.__dict__ and not force:
         raise TypeError('class already has event: %s' % name)
+    event.name = name
     clz._pysm_events[name] = event
     # clz.__dict__ is not writable; just setattr to clz
     setattr(clz, name, event)
@@ -126,7 +130,7 @@ def state_machine(original_class):
 
 def process_states(original_class):
     original_class._pysm_initial_state = None
-    original_class._pysm_states = {}
+    original_class._pysm_states = {'WhateverState': WhateverState}
     for name, value in inspect.getmembers(original_class):
         if not (inspect.isclass(value) and issubclass(value, State)):
             continue
@@ -145,17 +149,17 @@ def process_states(original_class):
 
 def process_events(original_class):
     original_class._pysm_events = {}
-    for name, value in inspect.getmembers(original_class):
-        if not isinstance(value, Event):
+    for name, event in inspect.getmembers(original_class):
+        if not isinstance(event, PysmEvent):
             continue
-        validate_event_states(original_class, value)
-        value.name = name
-        original_class._pysm_events[name] = value
+        validate_event_states(original_class, event)
+        event.name = name
+        original_class._pysm_events[name] = event
 
-        if isinstance(value, RestoreEvent):
+        if isinstance(event, RestoreEvent):
             restore_name = 'restore_from_' + name
             restore_event = Event(
-                from_states=value.to_state, to_state=WhateverState
+                from_states=event.to_state, to_state='WhateverState'
             )
             restore_event.name = restore_name
             setattr(original_class, restore_name, restore_event)
