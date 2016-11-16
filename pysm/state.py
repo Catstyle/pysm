@@ -1,5 +1,5 @@
 import inspect
-from six import add_metaclass, string_types
+from six import add_metaclass
 
 
 class StateMeta(type):
@@ -23,11 +23,11 @@ class StateMeta(type):
         return not self == other
 
     def __hash__(self):
-        return id(self.__name__)
+        return id(self)
 
     def __unicode__(self):
         return self.__name__
-    __str__ = __unicode__
+    __repr__ = __str__ = __unicode__
 
 
 @add_metaclass(StateMeta)
@@ -39,16 +39,8 @@ class State(object):
     def exit_state(self, to_state):
         pass
 
-    def __eq__(self, other):
-        if isinstance(other, string_types):
-            return self.__class__.__name__ == other
-        elif isinstance(other, State):
-            return self.__class__ == other.__class__
-        else:
-            return NotImplemented
-
-    def __ne__(self, other):
-        return not self == other
+    def can_switch_state(self):
+        return True
 
 
 class WhateverState(State):

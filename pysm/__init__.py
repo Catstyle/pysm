@@ -1,12 +1,12 @@
 from .state import State, WhateverState
-from .event import Event, RestoreEvent
+from .event import Event, InstanceEvent
 from .handler import state_machine
 from .error import InvalidTransition
 
 
 __all__ = [
-    'State', 'WhateverState', 'Event', 'RestoreEvent', 'InvalidTransition',
-    'state_machine'
+    'state_machine', 'State', 'WhateverState', 'Event', 'InstanceEvent',
+    'InvalidTransition'
 ]
 
 __version__ = '0.4.1'

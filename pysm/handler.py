@@ -2,12 +2,12 @@ import inspect
 from functools import partial
 
 from .state import State, WhateverState
-from .event import PysmEvent, Event, InstanceEvent, RestoreEvent
+from .event import PysmEvent, InstanceEvent
 from .error import InvalidEventState
 
 
 def validate_event_states(original_class, event):
-    for state_name in event.from_states + (event.to_state,):
+    for state_name in (event.from_state, event.to_state):
         state = original_class._pysm_states.get(state_name)
         if not inspect.isclass(state) or not issubclass(state, State):
             raise InvalidEventState(
@@ -39,6 +39,19 @@ def switch_state(instance, from_state, to_state, *args, **kwargs):
     instance._pysm_previous_state = from_state
     attach_state(instance, to_state)
     instance.enter_state(from_state, *args, **kwargs)
+
+
+def update_state(instance, *args, **kwargs):
+    if not instance.can_switch_state():
+        return
+    current_name = instance.current_state.__name__
+    for handler, event_name in instance._pysm_handlers[current_name]:
+        if isinstance(handler, str):
+            handler = getattr(instance, handler)
+        assert callable(handler)
+        if handler():
+            getattr(instance, event_name)(*args, **kwargs)
+            break
 
 
 def register_state_to_instance(instance, state):
@@ -76,7 +89,7 @@ def register_state_to_class(clz, state, force=False):
     setattr(clz, state_name, state)
 
 
-def register_event_to_instance(instance, name, event):
+def register_event_to_instance(instance, name, event, insert=False):
     if inspect.isclass(instance):
         raise ValueError('cannot register event to non instance object, '
                          'call register_event_to_class instead')
@@ -89,9 +102,12 @@ def register_event_to_instance(instance, name, event):
         raise TypeError('instance already has event: %s' % name)
     if '_pysm_events' not in instance.__dict__:
         instance.__dict__['_pysm_events'] = instance._pysm_events.copy()
+    if '_pysm_handlers' not in instance.__dict__:
+        instance.__dict__['_pysm_handlers'] = instance._pysm_handlers.copy()
     event.name = name
     instance.__dict__[name] = event
     instance._pysm_events[name] = event
+    return process_handlers(instance, event, insert)
 
 
 def register_event_to_class(clz, name, event, force=False):
@@ -109,6 +125,7 @@ def register_event_to_class(clz, name, event, force=False):
     clz._pysm_events[name] = event
     # clz.__dict__ is not writable; just setattr to clz
     setattr(clz, name, event)
+    process_handlers(clz, event)
 
 
 def state_machine(original_class):
@@ -122,6 +139,7 @@ def state_machine(original_class):
         self._pysm_state_methods = set()
         self._pysm_previous_state = None
         self.current_state = None
+        self.__dict__['update_state'] = partial(update_state, self)
         attach_state(self, self._pysm_initial_state)
         original_init(self, *args, **kwargs)
     original_class.__init__ = new_init
@@ -149,18 +167,28 @@ def process_states(original_class):
 
 def process_events(original_class):
     original_class._pysm_events = {}
+    original_class._pysm_handlers = {}
     for name, event in inspect.getmembers(original_class):
         if not isinstance(event, PysmEvent):
             continue
         validate_event_states(original_class, event)
         event.name = name
         original_class._pysm_events[name] = event
+        process_handlers(original_class, event)
 
-        if isinstance(event, RestoreEvent):
-            restore_name = 'restore_from_' + name
-            restore_event = Event(
-                from_states=event.to_state, to_state='WhateverState'
-            )
-            restore_event.name = restore_name
-            setattr(original_class, restore_name, restore_event)
-            original_class._pysm_events[restore_name] = restore_event
+
+def process_handlers(original_class, event, insert=False):
+    handlers = original_class._pysm_handlers
+    from_state = event.from_state
+    comb = (event.handler, event.name)
+
+    if insert:
+        prev_event = handlers.get(from_state)
+        handlers[from_state] = [comb]
+        assert len(prev_event) == 1, prev_event
+        return prev_event[0][1]
+    else:
+        try:
+            handlers[from_state].append(comb)
+        except KeyError:
+            handlers[from_state] = [comb]
