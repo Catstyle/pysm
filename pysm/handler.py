@@ -57,17 +57,18 @@ def switch_state(instance, to_state, *args, **kwargs):
 def update_state(instance, *args, **kwargs):
     if not instance.can_switch_state():
         return
-    current_name = instance.current_state.__name__
-    for to_state, handler, hook in instance._pysm_rules.get(current_name, []):
-        if handler is True:
-            result = True
-        else:
-            assert isinstance(handler, str)
-            if handler.startswith('!'):
-                result = not getattr(instance, handler[1:])()
-            else:
-                result = getattr(instance, handler)()
-        if result:
+    rules = instance._pysm_rules.get(instance.current_state.__name__, [])
+    for to_state, prerequisites, negative, hook in rules:
+        if prerequisites is not True:
+            assert isinstance(prerequisites, list)
+            for prerequisite in prerequisites:
+                prerequisite = getattr(instance, prerequisite)
+            if callable(prerequisite):
+                prerequisite = prerequisite()
+            if negative:
+                prerequisite = not prerequisite
+        assert isinstance(prerequisite, bool), prerequisite
+        if prerequisite:
             hook = getattr(instance, hook, None)
             if hook:
                 hook()
@@ -100,17 +101,26 @@ def add_event(obj, state_name, event):
     setattr(obj, event_name, event)
 
 
-def add_switch_rule(obj, from_state, to_state, handler, hook='', first=False):
+def add_switch_rule(obj, from_state, to_state, prerequisite, hook='',
+                    first=False):
     if not getattr(obj, 'initiated_pysm', False):
         raise TypeError('instance object is not a valid pysm state machine')
     rules = obj._pysm_rules
+    if prerequisite is True:
+        prerequisites, negative = True, False
+    elif prerequisite.startswith('!'):
+        prerequisites, negative = prerequisite[1:].split('.'), True
+    else:
+        prerequisites, negative = prerequisite.split('.'), False
     try:
         if first:
-            rules[from_state].insert(0, (to_state, handler, hook))
+            rules[from_state].insert(
+                0, (to_state, prerequisites, negative, hook)
+            )
         else:
-            rules[from_state].append((to_state, handler, hook))
+            rules[from_state].append((to_state, prerequisites, negative, hook))
     except KeyError:
-        rules[from_state] = [(to_state, handler, hook)]
+        rules[from_state] = [(to_state, prerequisites, negative, hook)]
 
 
 def add_instance_state(instance, state):
@@ -141,21 +151,21 @@ def add_class_event(clz, state_name):
     add_event(clz, state_name, Event(state_name))
 
 
-def add_instance_switch_rule(instance, from_state, to_state, handler, hook='',
-                             first=False):
+def add_instance_switch_rule(instance, from_state, to_state, prerequisite,
+                             hook='', first=False):
     if inspect.isclass(instance):
         raise ValueError('cannot add switch rule to non instance object, '
                          'check class.add_pysm_switch_rule instead')
     if '_pysm_rules' not in instance.__dict__:
         instance.__dict__['_pysm_rules'] = deepcopy(instance._pysm_rules)
-    add_switch_rule(instance, from_state, to_state, handler, hook, first)
+    add_switch_rule(instance, from_state, to_state, prerequisite, hook, first)
 
 
-def add_class_switch_rule(clz, from_state, to_state, handler, hook=''):
+def add_class_switch_rule(clz, from_state, to_state, prerequisite, hook=''):
     if not inspect.isclass(clz):
         raise ValueError('cannot add state to non class object, '
                          'check instance.add_pysm_state instead')
-    add_switch_rule(clz, from_state, to_state, handler, hook)
+    add_switch_rule(clz, from_state, to_state, prerequisite, hook)
 
 
 def process_states(clz):
