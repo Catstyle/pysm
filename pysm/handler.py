@@ -92,10 +92,20 @@ def add_state(obj, state, force=False):
     setattr(obj, state_name, state)
 
 
-def add_event(obj, state_name, event):
+def add_states(obj, states):
+    for state in states:
+        add_class_state(obj, state)
+        if getattr(state, 'initial', False):
+            if obj._pysm_initial_state is not None:
+                raise ValueError("multiple initial states!")
+            obj._pysm_initial_state = state
+
+
+def add_event(obj, state_name, event, force=False):
     validate_state(obj, state_name)
     event_name = 'switch_to_%s' % underscore(state_name)
-    assert event_name not in obj._pysm_events, (event_name, obj._pysm_events)
+    if event_name in obj._pysm_events and not force:
+        raise TypeError('obj already has event: %s' % event_name)
     event.name = event_name
     obj._pysm_events[event_name] = event
     setattr(obj, event_name, event)
@@ -123,14 +133,20 @@ def add_switch_rule(obj, from_state, to_state, prerequisite, hook='',
         rules[from_state] = [(to_state, prerequisites, negative, hook)]
 
 
-def add_instance_state(instance, state):
+def add_switch_rules(obj, switch_rules):
+    for from_state, rules in switch_rules.items():
+        for rule in rules:
+            add_switch_rule(obj, from_state, *rule)
+
+
+def add_instance_state(instance, state, force=False):
     if inspect.isclass(instance):
         raise ValueError('cannot add state to non instance object, '
                          'check class.add_pysm_state instead')
     if '_pysm_states' not in instance.__dict__:
         instance.__dict__['_pysm_states'] = instance._pysm_states.copy()
-    add_state(instance, state, False)
-    add_instance_event(instance, state.__name__)
+    add_state(instance, state, force)
+    add_instance_event(instance, state.__name__, force)
 
 
 def add_class_state(clz, state, force=False):
@@ -138,17 +154,17 @@ def add_class_state(clz, state, force=False):
         raise ValueError('cannot add state to non class object, '
                          'check instance.add_pysm_state instead')
     add_state(clz, state, force)
-    add_class_event(clz, state.__name__)
+    add_class_event(clz, state.__name__, force)
 
 
-def add_instance_event(instance, state_name):
+def add_instance_event(instance, state_name, force=False):
     if '_pysm_events' not in instance.__dict__:
         instance.__dict__['_pysm_events'] = instance._pysm_events.copy()
-    add_event(instance, state_name, InstanceEvent(instance, state_name))
+    add_event(instance, state_name, InstanceEvent(instance, state_name), force)
 
 
-def add_class_event(clz, state_name):
-    add_event(clz, state_name, Event(state_name))
+def add_class_event(clz, state_name, force=False):
+    add_event(clz, state_name, Event(state_name), force)
 
 
 def add_instance_switch_rule(instance, from_state, to_state, prerequisite,
@@ -168,63 +184,46 @@ def add_class_switch_rule(clz, from_state, to_state, prerequisite, hook=''):
     add_switch_rule(clz, from_state, to_state, prerequisite, hook)
 
 
-def process_states(clz):
+def init_pysm(ins):
+    ins._pysm_state_methods = set()
+    ins._pysm_previous_state = None
+    ins.current_state = None
+    ins.__dict__['update_state'] = partial(update_state, ins)
+    ins.__dict__['add_pysm_switch_rule'] = partial(
+        add_instance_switch_rule, ins
+    )
+    ins.__dict__['add_pysm_state'] = partial(add_instance_state, ins)
+
+    if ins._pysm_initial_state is None:
+        raise ValueError('missing initial state')
+    attach_state(ins, ins._pysm_initial_state)
+
+
+def state_machine(clz):
+    clz.initiated_pysm = True
+    clz.add_pysm_switch_rule = partial(add_class_switch_rule, clz)
+    clz.add_pysm_state = partial(add_class_state, clz)
+
+    clz._pysm_states = {'WhateverState': WhateverState}
+    clz._pysm_events = {}
     clz._pysm_initial_state = None
+    clz._pysm_rules = {}
+
+    states = []
     for name, state in inspect.getmembers(clz):
         if not (inspect.isclass(state) and issubclass(state, State)):
             continue
         if issubclass(state, WhateverState):
             raise TypeError('cannot inherit from WhateverState')
+        states.append(state)
 
-        clz._pysm_states[name] = state
-        add_class_event(clz, name)
+    add_states(clz, states)
+    add_switch_rules(clz, getattr(clz, 'pysm_switch_rules', {}))
 
-        if getattr(state, 'initial', False):
-            if clz._pysm_initial_state is not None:
-                raise ValueError("multiple initial states!")
-            clz._pysm_initial_state = state
-
-    if clz._pysm_initial_state is None:
-        raise ValueError('missing initial state')
-
-
-def process_rules(clz):
-    clz._pysm_rules = {}
-
-    switch_rules = getattr(clz, 'pysm_switch_rules', {})
-    for from_state, rules in switch_rules.items():
-        for rule in rules:
-            add_class_switch_rule(clz, from_state, *rule)
-
-
-def init_pysm(instance):
-    instance._pysm_state_methods = set()
-    instance._pysm_previous_state = None
-    instance.current_state = None
-    instance.__dict__['update_state'] = partial(update_state, instance)
-    instance.__dict__['add_pysm_switch_rule'] = partial(
-        add_instance_switch_rule, instance
-    )
-    instance.__dict__['add_pysm_state'] = partial(add_instance_state, instance)
-    attach_state(instance, instance._pysm_initial_state)
-
-
-def state_machine(original_class):
-    original_class.initiated_pysm = True
-    original_class.add_pysm_switch_rule = partial(
-        add_class_switch_rule, original_class
-    )
-    original_class.add_pysm_state = partial(add_class_state, original_class)
-    original_class._pysm_states = {'WhateverState': WhateverState}
-    original_class._pysm_events = {}
-
-    process_states(original_class)
-    process_rules(original_class)
-
-    original_init = original_class.__init__
+    original_init = clz.__init__
 
     def new_init(self, *args, **kwargs):
         init_pysm(self)
         original_init(self, *args, **kwargs)
-    original_class.__init__ = new_init
-    return original_class
+    clz.__init__ = new_init
+    return clz
