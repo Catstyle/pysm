@@ -67,6 +67,8 @@ def update_state(instance, *args, **kwargs):
                 prerequisite = prerequisite()
             if negative:
                 prerequisite = not prerequisite
+        else:
+            prerequisite = True
         assert isinstance(prerequisite, bool), prerequisite
         if prerequisite:
             hook = getattr(instance, hook, None)
@@ -81,20 +83,20 @@ def update_state(instance, *args, **kwargs):
 
 def add_state(obj, state, force=False):
     if not getattr(obj, 'initiated_pysm', False):
-        raise TypeError('object is not a valid pysm state machine')
+        raise TypeError('`%s` is not a valid pysm state machine' % obj)
     if not (inspect.isclass(state) and issubclass(state, State)):
         raise ValueError('state is not a valid State')
 
     state_name = state.__name__
     if state_name in obj.__dict__ and not force:
-        raise TypeError('obj already has state: %s' % state_name)
+        raise TypeError('`%s` already has state: %s' % (obj, state_name))
     obj._pysm_states[state_name] = state
     setattr(obj, state_name, state)
 
 
 def add_states(obj, states):
     for state in states:
-        add_class_state(obj, state)
+        add_class_state(obj, state, True)
         if getattr(state, 'initial', False):
             if obj._pysm_initial_state is not None:
                 raise ValueError("multiple initial states!")
@@ -105,7 +107,7 @@ def add_event(obj, state_name, event, force=False):
     validate_state(obj, state_name)
     event_name = 'switch_to_%s' % underscore(state_name)
     if event_name in obj._pysm_events and not force:
-        raise TypeError('obj already has event: %s' % event_name)
+        raise TypeError('`%s` already has event: %s' % (obj, event_name))
     event.name = event_name
     obj._pysm_events[event_name] = event
     setattr(obj, event_name, event)
@@ -114,7 +116,7 @@ def add_event(obj, state_name, event, force=False):
 def add_switch_rule(obj, from_state, to_state, prerequisite, hook='',
                     first=False):
     if not getattr(obj, 'initiated_pysm', False):
-        raise TypeError('instance object is not a valid pysm state machine')
+        raise TypeError('`%s` is not a valid pysm state machine' % obj)
     rules = obj._pysm_rules
     if prerequisite is True:
         prerequisites, negative = True, False
