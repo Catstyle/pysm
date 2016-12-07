@@ -69,7 +69,6 @@ def update_state(instance, *args, **kwargs):
                 prerequisite = not prerequisite
         else:
             prerequisite = True
-        assert isinstance(prerequisite, bool), prerequisite
         if prerequisite:
             hook = getattr(instance, hook, None)
             if hook:
