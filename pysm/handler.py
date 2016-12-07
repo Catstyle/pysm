@@ -61,12 +61,12 @@ def update_state(instance, *args, **kwargs):
     for to_state, prerequisites, negative, hook in rules:
         if prerequisites is not True:
             assert isinstance(prerequisites, list)
+            target = instance
             for prerequisite in prerequisites:
-                prerequisite = getattr(instance, prerequisite)
-            if callable(prerequisite):
-                prerequisite = prerequisite()
-            if negative:
-                prerequisite = not prerequisite
+                target = getattr(target, prerequisite)
+            if callable(target):
+                target = target()
+            prerequisite = not target if negative else target
         else:
             prerequisite = True
         if prerequisite:
@@ -80,22 +80,26 @@ def update_state(instance, *args, **kwargs):
         assert False, ('should have switched', instance._pysm_rules)
 
 
-def add_state(obj, state, force=False):
+def add_state(obj, state_name, state, force=False):
     if not getattr(obj, 'initiated_pysm', False):
         raise TypeError('`%s` is not a valid pysm state machine' % obj)
     if not (inspect.isclass(state) and issubclass(state, State)):
         raise ValueError('state is not a valid State')
 
-    state_name = state.__name__
     if state_name in obj.__dict__ and not force:
         raise TypeError('`%s` already has state: %s' % (obj, state_name))
+    if '_pysm_states' not in obj.__dict__:
+        if inspect.isclass(obj):
+            setattr(obj, '_pysm_states', obj._pysm_states.copy())
+        else:
+            obj.__dict__['_pysm_states'] = obj._pysm_states.copy()
     obj._pysm_states[state_name] = state
     setattr(obj, state_name, state)
 
 
 def add_states(obj, states):
     for state in states:
-        add_class_state(obj, state, True)
+        add_class_state(obj, state.__name__, state, True)
         if getattr(state, 'initial', False):
             if obj._pysm_initial_state is not None:
                 raise ValueError("multiple initial states!")
@@ -107,6 +111,11 @@ def add_event(obj, state_name, event, force=False):
     event_name = 'switch_to_%s' % underscore(state_name)
     if event_name in obj._pysm_events and not force:
         raise TypeError('`%s` already has event: %s' % (obj, event_name))
+    if '_pysm_events' not in obj.__dict__:
+        if inspect.isclass(obj):
+            setattr(obj, '_pysm_events', obj._pysm_events.copy())
+        else:
+            obj.__dict__['_pysm_events'] = obj._pysm_events.copy()
     event.name = event_name
     obj._pysm_events[event_name] = event
     setattr(obj, event_name, event)
@@ -140,27 +149,23 @@ def add_switch_rules(obj, switch_rules):
             add_switch_rule(obj, from_state, *rule)
 
 
-def add_instance_state(instance, state, force=False):
+def add_instance_state(instance, state_name, state, force=False):
     if inspect.isclass(instance):
         raise ValueError('cannot add state to non instance object, '
                          'check class.add_pysm_state instead')
-    if '_pysm_states' not in instance.__dict__:
-        instance.__dict__['_pysm_states'] = instance._pysm_states.copy()
-    add_state(instance, state, force)
-    add_instance_event(instance, state.__name__, force)
+    add_state(instance, state_name, state, force)
+    add_instance_event(instance, state_name, force)
 
 
-def add_class_state(clz, state, force=False):
+def add_class_state(clz, state_name, state, force=False):
     if not inspect.isclass(clz):
         raise ValueError('cannot add state to non class object, '
                          'check instance.add_pysm_state instead')
-    add_state(clz, state, force)
-    add_class_event(clz, state.__name__, force)
+    add_state(clz, state_name, state, force)
+    add_class_event(clz, state_name, force)
 
 
 def add_instance_event(instance, state_name, force=False):
-    if '_pysm_events' not in instance.__dict__:
-        instance.__dict__['_pysm_events'] = instance._pysm_events.copy()
     add_event(instance, state_name, InstanceEvent(instance, state_name), force)
 
 
@@ -190,10 +195,6 @@ def init_pysm(ins):
     ins._pysm_previous_state = None
     ins.current_state = None
     ins.__dict__['update_state'] = partial(update_state, ins)
-    ins.__dict__['add_pysm_switch_rule'] = partial(
-        add_instance_switch_rule, ins
-    )
-    ins.__dict__['add_pysm_state'] = partial(add_instance_state, ins)
 
     if ins._pysm_initial_state is None:
         raise ValueError('missing initial state')
@@ -202,8 +203,6 @@ def init_pysm(ins):
 
 def state_machine(clz):
     clz.initiated_pysm = True
-    clz.add_pysm_switch_rule = partial(add_class_switch_rule, clz)
-    clz.add_pysm_state = partial(add_class_state, clz)
 
     clz._pysm_states = {'WhateverState': WhateverState}
     clz._pysm_events = {}
