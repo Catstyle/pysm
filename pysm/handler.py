@@ -27,7 +27,7 @@ def validate_state(clz, state_name):
 
 
 def attach_state(instance, state):
-    assert instance.current_state is None
+    assert instance.current_state is None, instance.current_state
     base_dict = instance.__dict__
     for name, method in state.state_methods.items():
         base_dict[name] = partial(method, instance)
@@ -36,7 +36,7 @@ def attach_state(instance, state):
 
 
 def detach_state(instance):
-    assert instance.current_state
+    assert instance.current_state, instance.current_state
     base_dict = instance.__dict__
     for name in instance._pysm_state_methods:
         base_dict.pop(name, None)
@@ -77,17 +77,17 @@ def update_state(instance, *args, **kwargs):
             getattr(instance, event_name)(*args, **kwargs)
             break
     else:
-        assert False, ('should have switched', instance._pysm_rules)
+        assert False, (instance.current_state, rules, instance._pysm_rules)
 
 
 def add_state(obj, state_name, state, force=False):
     if not getattr(obj, 'initiated_pysm', False):
         raise TypeError('`%s` is not a valid pysm state machine' % obj)
     if not (inspect.isclass(state) and issubclass(state, State)):
-        raise ValueError('state is not a valid State')
+        raise TypeError('state is not a valid State')
 
     if state_name in obj.__dict__ and not force:
-        raise TypeError('`%s` already has state: %s' % (obj, state_name))
+        raise ValueError('`%s` already has state: %s' % (obj, state_name))
     if '_pysm_states' not in obj.__dict__:
         if inspect.isclass(obj):
             setattr(obj, '_pysm_states', obj._pysm_states.copy())
@@ -110,7 +110,7 @@ def add_event(obj, state_name, event, force=False):
     validate_state(obj, state_name)
     event_name = 'switch_to_%s' % underscore(state_name)
     if event_name in obj._pysm_events and not force:
-        raise TypeError('`%s` already has event: %s' % (obj, event_name))
+        raise ValueError('`%s` already has event: %s' % (obj, event_name))
     if '_pysm_events' not in obj.__dict__:
         if inspect.isclass(obj):
             setattr(obj, '_pysm_events', obj._pysm_events.copy())
@@ -151,16 +151,16 @@ def add_switch_rules(obj, switch_rules):
 
 def add_instance_state(instance, state_name, state, force=False):
     if inspect.isclass(instance):
-        raise ValueError('cannot add state to non instance object, '
-                         'check class.add_pysm_state instead')
+        raise TypeError('cannot add state to non instance object, '
+                        'check class.add_pysm_state instead')
     add_state(instance, state_name, state, force)
     add_instance_event(instance, state_name, force)
 
 
 def add_class_state(clz, state_name, state, force=False):
     if not inspect.isclass(clz):
-        raise ValueError('cannot add state to non class object, '
-                         'check instance.add_pysm_state instead')
+        raise TypeError('cannot add state to non class object, '
+                        'check instance.add_pysm_state instead')
     add_state(clz, state_name, state, force)
     add_class_event(clz, state_name, force)
 
@@ -176,8 +176,8 @@ def add_class_event(clz, state_name, force=False):
 def add_instance_switch_rule(instance, from_state, to_state, prerequisite,
                              hook='', first=False):
     if inspect.isclass(instance):
-        raise ValueError('cannot add switch rule to non instance object, '
-                         'check class.add_pysm_switch_rule instead')
+        raise TypeError('cannot add switch rule to non instance object, '
+                        'check class.add_pysm_switch_rule instead')
     if '_pysm_rules' not in instance.__dict__:
         instance.__dict__['_pysm_rules'] = deepcopy(instance._pysm_rules)
     add_switch_rule(instance, from_state, to_state, prerequisite, hook, first)
@@ -185,8 +185,8 @@ def add_instance_switch_rule(instance, from_state, to_state, prerequisite,
 
 def add_class_switch_rule(clz, from_state, to_state, prerequisite, hook=''):
     if not inspect.isclass(clz):
-        raise ValueError('cannot add state to non class object, '
-                         'check instance.add_pysm_state instead')
+        raise TypeError('cannot add state to non class object, '
+                        'check instance.add_pysm_state instead')
     add_switch_rule(clz, from_state, to_state, prerequisite, hook)
 
 
