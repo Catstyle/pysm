@@ -122,7 +122,7 @@ def add_event(obj, state_name, event, force=False):
 
 
 def add_switch_rule(obj, from_state, to_state, prerequisite, hook='',
-                    first=False):
+                    first=False, clear=False):
     if not getattr(obj, 'initiated_pysm', False):
         raise TypeError('`%s` is not a valid pysm state machine' % obj)
     rules = obj._pysm_rules
@@ -132,6 +132,8 @@ def add_switch_rule(obj, from_state, to_state, prerequisite, hook='',
         prerequisites, negative = prerequisite[1:].split('.'), True
     else:
         prerequisites, negative = prerequisite.split('.'), False
+    if clear:
+        rules[from_state] = []
     try:
         if first:
             rules[from_state].insert(
