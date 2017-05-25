@@ -5,4 +5,4 @@ from .handler import state_machine
 
 __all__ = ['state_machine', 'State', 'WhateverState', 'Event', 'InstanceEvent']
 
-__version__ = '0.4.1.post1'
+__version__ = '0.4.2'

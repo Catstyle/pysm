@@ -10,15 +10,20 @@ class StateMeta(type):
         cls = type.__new__(cls, name, bases, attrs)
         number = 0
         cls.state_methods = {}
+        # check cython_function_or_method in str(type(value)) is a workaround
         for base in bases:
             number = number or getattr(base, 'pysm_number', 0)
             for name, value in base.__dict__.items():
-                if not name.startswith('__') and inspect.isfunction(value):
+                if (not name.startswith('__') and
+                        inspect.isfunction(value) or
+                        'cython_function_or_method' in str(type(value))):
                     cls.state_methods[name] = value
             for name, value in getattr(base, 'state_methods', {}).items():
                 cls.state_methods[name] = value
         for name, value in attrs.items():
-            if not name.startswith('__') and inspect.isfunction(value):
+            if (not name.startswith('__') and
+                    inspect.isfunction(value) or
+                    'cython_function_or_method' in str(type(value))):
                 cls.state_methods[name] = value
         if not number:
             number = StateMeta.pysm_number + 1
