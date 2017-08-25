@@ -1,78 +1,89 @@
 import string as py_string
+from collections import deque
 
-from pysm import Event, State, StateMachine
+from unittest import TestCase
+
+from pysm import Event, State, state_machine
 
 
+@state_machine('calculator')
 class Calculator(object):
 
     def __init__(self):
+        self.stack = deque()
         self.result = None
-        self.state_machine = self.get_state_machine()
 
-    def get_state_machine(self):
-        sm = StateMachine('calculator')
-        initial = State('initial')
-        number = State('number')
-        sm.add_states([initial, number])
-        sm.set_initial_state(initial)
-        sm.add_transition(initial, number,
-                          events=['parse'], inputs=py_string.digits,
-                          action=self.start_building_number)
-        sm.add_transition(number, None,
-                          events=['parse'], inputs=py_string.digits,
-                          action=self.build_number)
-        sm.add_transition(number, initial,
-                          events=['parse'], inputs=py_string.whitespace)
-        sm.add_transition(initial, None,
-                          events=['parse'], inputs='+-*/',
-                          action=self.do_operation)
-        sm.add_transition(initial, None,
-                          events=['parse'], inputs='=',
-                          action=self.do_equal)
-        sm.initialize()
-        return sm
+    def reset(self):
+        self.stack.clear()
+        self.result = None
+        self.machine.reinit_instance(self)
 
     def calculate(self, string):
-        state_machine = self.state_machine
+        self.reset()
         for char in string:
-            state_machine.dispatch(Event('parse', input=char, entity=self))
+            self.dispatch(Event('parse', input=char))
         return self.result
 
-    def start_building_number(self, event):
+    def start_building_number(self, state, event):
         digit = event.input
-        self.state_machine.stack.append(int(digit))
-        return True
+        self.stack.append(int(digit))
 
-    def build_number(self, event):
+    def build_number(self, state, event):
         digit = event.input
-        number = str(self.state_machine.stack.pop())
+        number = str(self.stack.pop())
         number += digit
-        self.state_machine.stack.append(int(number))
-        return True
+        self.stack.append(int(number))
 
-    def do_operation(self, event):
+    def do_operation(self, state, event):
         operation = event.input
-        y = self.state_machine.stack.pop()
-        x = self.state_machine.stack.pop()
+        y = self.stack.pop()
+        x = self.stack.pop()
         # eval is evil
         result = eval('float(%s) %s float(%s)' % (x, operation, y))
-        self.state_machine.stack.append(result)
-        return True
+        self.stack.append(result)
 
-    def do_equal(self, event):
-        number = self.state_machine.stack.pop()
+    def do_equal(self, state, event):
+        number = self.stack.pop()
         self.result = number
-        return True
+
+
+def is_digit(state, event):
+    return event.input in py_string.digits
+
+
+sm = Calculator.machine
+sm.add_states([State('initial'), State('number'), State('result')])
+sm.set_initial_state('initial')
+
+sm.add_transitions([
+    {'from_state': 'initial', 'to_state': 'number', 'event': 'parse',
+     'conditions': [is_digit], 'before': 'start_building_number'},
+    {'from_state': 'number', 'to_state': 'number', 'event': 'parse',
+     'conditions': [is_digit], 'before': 'build_number'},
+    {'from_state': 'number', 'to_state': 'initial', 'event': 'parse',
+     'conditions': [lambda state, evt: evt.input in py_string.whitespace]},
+    {'from_state': 'initial', 'to_state': 'initial', 'event': 'parse',
+     'conditions': [lambda state, evt: evt.input in '+-*/'],
+     'before': 'do_operation'},
+    {'from_state': 'initial', 'to_state': 'result', 'event': 'parse',
+     'conditions': [lambda state, evt: evt.input == '='],
+     'before': 'do_equal'},
+])
 
 
 def test_calc_callbacks():
     calc = Calculator()
-    assert calc.calculate(' 167 3 2 2 * * * 1 - =') == 2003
-    assert calc.calculate('    167 3 2 2 * * * 1 - 2 / =') == 1001.5
-    assert calc.calculate('    3   5 6 +  * =') == 33
-    assert calc.calculate('        3    4       +     =') == 7
-    assert calc.calculate('2 4 / 5 6 - * =') == -0.5
+    for syntax, value in ((' 167 3 2 2 * * * 1 - =', 2003),
+                          ('    167 3 2 2 * * * 1 - 2 / =', 1001.5),
+                          ('    3   5 6 +  * =', 33),
+                          ('        3    4       +     =', 7),
+                          ('2 4 / 5 6 - * =', -0.5),):
+        result = calc.calculate(syntax)
+        assert result == value, (syntax, result, value)
+        calc.reset()
 
 
-if __name__ == '__main__':
-    test_calc_callbacks()
+class CalculatorTest(TestCase):
+
+    def test_rpn(self):
+        test_calc_callbacks()
