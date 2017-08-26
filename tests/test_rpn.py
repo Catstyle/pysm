@@ -3,7 +3,7 @@ from collections import deque
 
 from unittest import TestCase
 
-from pysm import Event, State, state_machine
+from pysm import Event, state_machine
 
 
 @state_machine('calculator')
@@ -52,8 +52,7 @@ def is_digit(state, event):
 
 
 sm = Calculator.machine
-sm.add_states([State('initial'), State('number'), State('result')])
-sm.set_initial_state('initial')
+sm.add_states(['initial', 'number', 'result'], initial='initial')
 
 sm.add_transitions([
     {'from_state': 'initial', 'to_state': 'number', 'event': 'parse',
