@@ -3,15 +3,16 @@ from functools import partial
 from six import string_types
 
 from .core import Event, State, Machine
-from .utils import validate_initial_state
+from .error import InvalidTransition
 
 
 class NestedState(State):
 
     separator = '.'
 
-    def __init__(self, name, parent=None, initial=None):
-        super(NestedState, self).__init__(name)
+    def __init__(self, name, on_enter=None, on_exit=None, parent=None,
+                 initial=None):
+        super(NestedState, self).__init__(name, on_enter, on_exit)
         self.parent = parent
         if parent:
             parent.children[self.name] = self
@@ -23,13 +24,8 @@ class NestedState(State):
         if event.name in self.handlers:
             event.propagate = False
             self.handlers[event.name](self, event)
-        # Never propagate exit/enter events, even if propagate is set to True
         if self.parent and event.propagate:
             self.parent._on(event)
-
-    def set_initial_state(self, state_name):
-        validate_initial_state(self, state_name)
-        self.initial = state_name
 
     def __repr__(self):
         return '<NestedState {}, handlers={}>'.format(
@@ -41,6 +37,35 @@ class NestedMachine(Machine):
 
     StateClass = NestedState
     STACK_SIZE = 32
+
+    def _get_transition(self, state, event):
+        instance = event.instance
+        target = state
+        while 1:
+            key = (target.name, event.name)
+            transitions = instance.transitions[key] + self.transitions[key]
+            if transitions:
+                break
+            if not target.parent:
+                raise InvalidTransition('{} cannot handle event {}'.format(
+                    state, event
+                ))
+            target = target.parent
+        for transition in transitions:
+            for cond, target in transition['conditions']:
+                if isinstance(cond, string_types):
+                    predicate = instance
+                    for pre in cond:
+                        predicate = getattr(predicate, pre)
+                else:
+                    predicate = cond
+                if callable(predicate):
+                    value = predicate(state, event)
+                if value != target:
+                    break
+            else:
+                return transition
+        return None
 
     def _get_top_state(self, state, other_state):
         ancestors = []
@@ -61,8 +86,8 @@ class NestedMachine(Machine):
                 break
         return top
 
-    def _enter_state(self, instance, state, from_state=None, event=None):
-        instance.state = state.name
+    def _enter_state(self, state, from_state, event):
+        event.instance.state = state.name
         top_state = event.cargo.get('top_state') or \
             self._get_top_state(state, from_state)
         path = [state]
@@ -70,16 +95,16 @@ class NestedMachine(Machine):
             path.append(state.parent)
             state = state.parent
         for state in reversed(path):
-            state.enter_state(instance, from_state, event)
+            state.enter(from_state, event)
 
-    def _exit_state(self, instance, state, to_state=None, event=None):
-        instance.state_stack.append(state)
-        state.exit_state(instance, to_state, event)
+    def _exit_state(self, state, to_state, event):
+        event.instance.state_stack.append(state)
+        state.exit(to_state, event)
         top_state = self._get_top_state(state, to_state)
         while state.parent and state.parent != top_state:
-            state.parent.exit_state(instance, to_state, event)
+            state.parent.exit(to_state, event)
             state = state.parent
-        instance.state = None
+        event.instance.state = None
         event.cargo['top_state'] = top_state
 
     def _init_instance(self, instance):
@@ -89,7 +114,7 @@ class NestedMachine(Machine):
 
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.enter_state(instance, None, Event('initialize'))
+        state.enter(None, Event('initialize'))
         setattr(instance, 'dispatch', partial(self.dispatch, instance))
 
     def traverse(self, states, parent=None, remap={}):
@@ -106,22 +131,16 @@ class NestedMachine(Machine):
                 if state['name'] in remap:
                     continue
 
+                children = []
                 if 'children' in state:
+                    children = state.pop('children')
+                p = self._create_state(parent=parent, **state)
+                tmp_states.append(p)
+                if children:
                     # Concat the state names with the current scope.
                     # The scope is the concatenation of all # previous parents.
                     # Call traverse again to check for more nested states.
-                    p = self._create_state(
-                        state['name'], parent=parent,
-                        initial=state.get('initial')
-                    )
-                    nested = self.traverse(
-                        state['children'], parent=p,
-                        remap=state.get('remap', {})
-                    )
-                    tmp_states.append(p)
-                    tmp_states.extend(nested)
-                else:
-                    tmp_states.append(self._create_state(**state))
+                    tmp_states.extend(self.traverse(children, parent=p))
             elif isinstance(state, NestedState):
                 tmp_states.append(state)
             else:

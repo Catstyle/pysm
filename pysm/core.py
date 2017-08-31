@@ -4,10 +4,10 @@ from six import string_types
 
 from .error import InvalidTransition
 from .error import NoState
+from .error import InvalidState
+from .error import AlreadyHasState
+from .error import AlreadyHasInitialState
 from .utils import _nop
-from .utils import validate_add_state
-from .utils import validate_transition
-from .utils import validate_initial_state
 
 
 class Event(object):
@@ -28,20 +28,16 @@ class Event(object):
 
 class State(object):
 
-    def __init__(self, name):
+    def __init__(self, name, on_enter=None, on_exit=None):
         self.name = name
         self.handlers = {}
+        self.enter = on_enter or _nop
+        self.exit = on_exit or _nop
 
     def _on(self, event):
         if event.name in self.handlers:
             event.propagate = False
             self.handlers[event.name](self, event)
-
-    def enter_state(self, instance, from_state, event):
-        pass
-
-    def exit_state(self, instance, to_state, event):
-        pass
 
     def __repr__(self):
         return '<State {}, handlers={}>'.format(
@@ -58,6 +54,7 @@ class Machine(object):
         self.initial = None
         self.states = {}
         self.transitions = defaultdict(list)
+        self.wildcard_transitions = defaultdict(list)
 
     def _create_state(self, name, *args, **kwargs):
         return self.StateClass(name, *args, **kwargs)
@@ -86,20 +83,20 @@ class Machine(object):
                 return transition
         return None
 
-    def _enter_state(self, instance, state, from_state=None, event=None):
-        instance.state = state.name
-        state.enter_state(instance, from_state, event)
+    def _enter_state(self, state, from_state, event):
+        event.instance.state = state.name
+        state.enter(from_state, event)
 
-    def _exit_state(self, instance, state, to_state=None, event=None):
-        state.exit_state(instance, to_state, event)
-        instance.state = None
+    def _exit_state(self, state, to_state, event):
+        state.exit(to_state, event)
+        event.instance.state = None
 
     def _switch_state(self, instance, to_state, event=None):
-        event = event or Event('switch')
+        event = event or Event('switch', instance)
         from_state = self.states[instance.state]
-        self._exit_state(instance, from_state, to_state, event)
+        self._exit_state(from_state, to_state, event)
         to_state = self.states[to_state]
-        self._enter_state(instance, to_state, from_state, event)
+        self._enter_state(to_state, from_state, event)
 
     def _init_instance(self, instance):
         '''Initialize states in the state machine.
@@ -115,7 +112,7 @@ class Machine(object):
 
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.enter_state(instance, None, Event('initialize'))
+        state.enter(None, Event('initialize'))
         setattr(instance, 'dispatch', partial(self.dispatch, instance))
 
     def _reset(self):
@@ -123,9 +120,51 @@ class Machine(object):
         self.states = {}
         self.transitions = defaultdict(list)
 
+    def _validate_add_state(self, state_name, state, force):
+        if not isinstance(state, State):
+            raise InvalidState('`%r` is not a valid State' % state)
+        if self.has_state(state_name) and not force:
+            raise AlreadyHasState(
+                '`%s` already has state: %s' % (self, state_name)
+            )
+
+    def _validate_transition(self, from_state, to_state, event):
+        if not self.has_state(from_state) and from_state != '*':
+            raise NoState('unknown from state "{0}"'.format(from_state))
+        if not self.has_state(to_state):
+            raise NoState('unknown to state "{0}"'.format(to_state))
+
+    def _validate_initial_state(self, state_name, force):
+        if not self.has_state(state_name):
+            raise NoState('unknown initial state: {}'.format(state_name))
+        if self.initial is not None and not force:
+            raise AlreadyHasInitialState(
+                'multiple initial states, now: {}'.format(self.initial)
+            )
+
+    def _prepare_transition(self, from_state, to_state, event,
+                            conditions=None, before=None, after=None):
+        _conditions = []
+        for cond in conditions or []:
+            if isinstance(cond, string_types):
+                if cond.startswith('!'):
+                    predicate, target = cond[1:].split('.'), False
+                else:
+                    predicate, target = cond.split('.'), True
+            else:
+                predicate, target = cond, True
+            _conditions.append((predicate, target))
+        return {
+            'from_state': from_state,
+            'to_state': to_state,
+            'conditions': _conditions,
+            'before': before or _nop,
+            'after': after or _nop,
+        }
+
     def add_state(self, name, state=None, force=False):
         state = state or self._create_state(name)
-        validate_add_state(self, name, state, force)
+        self._validate_add_state(name, state, force)
         self.states[name] = state
 
     def add_states(self, states, initial=None, force=False):
@@ -149,7 +188,7 @@ class Machine(object):
         return self.states[state_name]
 
     def set_initial_state(self, state_name, force=False):
-        validate_initial_state(self, state_name, force)
+        self._validate_initial_state(state_name, force)
         self.initial = state_name
 
     def add_transition(self, from_state, to_state, event,
@@ -203,25 +242,17 @@ class Machine(object):
         :type after: |Callable|
 
         '''
-        validate_transition(self, from_state, to_state, event)
-        _conditions = []
-        for cond in conditions or []:
-            if isinstance(cond, string_types):
-                if cond.startswith('!'):
-                    predicate, target = cond[1:].split('.'), False
-                else:
-                    predicate, target = cond.split('.'), True
-            else:
-                predicate, target = cond, True
-            _conditions.append((predicate, target))
-
-        self.transitions[(from_state, event)].append({
-            'from_state': from_state,
-            'to_state': to_state,
-            'conditions': _conditions,
-            'before': before or _nop,
-            'after': after or _nop,
-        })
+        self._validate_transition(from_state, to_state, event)
+        transition = self._prepare_transition(
+            from_state, to_state, event, conditions, before, after
+        )
+        if from_state == '*':
+            self.wildcard_transitions[event].append(transition)
+        else:
+            self.transitions[(from_state, event)].append(transition)
+        for event, transitions in self.wildcard_transitions.items():
+            for from_state in self.states:
+                self.transitions[(from_state, event)].extend(transitions)
 
     def add_transitions(self, transitions):
         for transition in transitions:
@@ -233,7 +264,7 @@ class Machine(object):
     def reinit_instance(self, instance):
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.enter_state(instance, None, Event('reinit'))
+        state.enter(None, Event('reinit', instance))
 
     def dispatch(self, instance, event):
         '''Dispatch an event to a state machine.
@@ -260,8 +291,8 @@ class Machine(object):
         if isinstance(before, string_types):
             before = getattr(instance, before)
         before(state, event)
-        self._exit_state(instance, state, to_state, event)
-        self._enter_state(instance, to_state, state, event)
+        self._exit_state(state, to_state, event)
+        self._enter_state(to_state, state, event)
         after = transition['after']
         if isinstance(after, string_types):
             after = getattr(instance, after)

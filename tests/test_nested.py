@@ -8,7 +8,7 @@ except ImportError:
 
 from pysm.core import Event, state_machine
 from pysm.nested import NestedState, NestedMachine
-from pysm.error import AlreadyHasInitialState
+from pysm.error import AlreadyHasInitialState, InvalidTransition
 
 state_separator = NestedState.separator
 
@@ -94,19 +94,6 @@ class TestTransitions(TestCase):
         s.dispatch(Event('sprint'))
         self.assertEqual(s.state, 'D')
 
-    # def test_multiple_add_transitions_from_state(self):
-    #     s = self.stuff
-    #     s.machine.add_transition(
-    #         'advance', 'A', 'B', conditions=['this_fails'])
-    #     s.machine.add_transition('advance', 'A', 'C')
-    #     s.machine.add_transition('advance', 'C', 'C%s2' % State.separator)
-    #     s.advance()
-    #     self.assertEqual(s.state, 'C')
-    #     s.advance()
-    #     self.assertEqual(s.state, 'C%s2' % State.separator)
-    #     self.assertFalse(s.is_C())
-    #     self.assertTrue(s.is_C(allow_substates=True))
-
     # def test_add_custom_state(self):
     #     s = self.stuff
     #     s.machine.add_states([{'name': 'E', 'children': ['1', '2', '3']}])
@@ -118,7 +105,7 @@ class TestTransitions(TestCase):
     def test_enter_exit_nested_state(self):
         mock = MagicMock()
 
-        def callback():
+        def callback(state, event):
             mock()
         states = [
             'A', 'B',
@@ -131,166 +118,14 @@ class TestTransitions(TestCase):
         m = Stuff.machine
         m.add_states(states=states, initial='A')
         m.add_transitions(transitions)
-        m.dispatch(Event('go'))
+        s = Stuff()
+        s.dispatch(Event('go'))
+        self.assertEqual(s.state, 'C.1')
         self.assertTrue(mock.called)
         self.assertEqual(mock.call_count, 1)
-        m.go()
-        self.assertTrue(m.is_D())
+        s.dispatch(Event('go'))
+        self.assertEqual(s.state, 'D')
         self.assertEqual(mock.call_count, 3)
-
-    # def test_state_change_listeners(self):
-    #     m = Stuff.machine
-    #     m.add_transition('advance', 'A', 'C.1')
-    #     m.add_transition('reverse', 'C', 'A')
-    #     m.add_transition('lower', 'C.1', 'C.3.a')
-    #     m.add_transition('rise', 'C.3', 'C.1')
-    #     m.add_transition('fast', 'A', 'C.3.a'))
-    #     m.on_enter_C('hello_world')
-    #     m.on_exit_C('goodbye')
-    #     m.on_enter('C{0}3{0}a'.format(State.separator), 'greet')
-    #     m.on_exit('C%s3' % State.separator, 'meet')
-    #     m.advance()
-    #     self.assertEqual(s.state, 'C%s1' % State.separator)
-    #     self.assertEqual(s.message, 'Hello World!')
-    #     s.lower()
-    #     self.assertEqual(s.state, 'C{0}3{0}a'.format(State.separator))
-    #     self.assertEqual(s.message, 'Hi')
-    #     s.rise()
-    #     self.assertEqual(s.state, 'C%s1' % State.separator)
-    #     self.assertTrue(s.message.startswith('Nice to'))
-    #     s.reverse()
-    #     self.assertEqual(s.state, 'A')
-    #     self.assertTrue(s.message.startswith('So long'))
-    #     s.fast()
-    #     self.assertEqual(s.state, 'C{0}3{0}a'.format(State.separator))
-    #     self.assertEqual(s.message, 'Hi')
-    #     s.to_A()
-    #     self.assertEqual(s.state, 'A')
-    #     self.assertTrue(s.message.startswith('So long'))
-
-    # def test_enter_exit_nested(self):
-    #     m = Stuff.machine
-    #     m.add_transition('advance', 'A', 'C.1')
-    #     m.add_transition('reverse', 'C', 'A')
-    #     m.add_transition('lower', 'C.1', 'C.3.a'))
-    #     m.add_transition('rise', 'C.3', 'C.1')
-    #     m.add_transition('fast', 'A', 'C.3.a')
-    #     for name, state in s.machine.states.items():
-    #         state.on_enter.append('increase_level')
-    #         state.on_exit.append('decrease_level')
-
-    #     s.advance()
-    #     self.assertEqual(s.state, 'C%s1' % State.separator)
-    #     self.assertEqual(s.level, 2)
-    #     s.lower()
-    #     self.assertEqual(s.state, 'C{0}3{0}a'.format(State.separator))
-    #     self.assertEqual(s.level, 3)
-    #     s.rise()
-    #     self.assertEqual(s.state, 'C%s1' % State.separator)
-    #     self.assertEqual(s.level, 2)
-    #     s.reverse()
-    #     self.assertEqual(s.state, 'A')
-    #     self.assertEqual(s.level, 1)
-    #     s.fast()
-    #     self.assertEqual(s.state, 'C{0}3{0}a'.format(State.separator))
-    #     self.assertEqual(s.level, 3)
-    #     s.to_A()
-    #     self.assertEqual(s.state, 'A')
-    #     self.assertEqual(s.level, 1)
-    #     if State.separator in '_':
-    #         s.to_C_3_a()
-    #     else:
-    #         s.to_C.s3.a()
-    #     self.assertEqual(s.state, 'C{0}3{0}a'.format(State.separator))
-    #     self.assertEqual(s.level, 3)
-
-    # def test_ordered_transitions(self):
-    #     states = [
-    #         {'name': 'first',
-    #          'children': ['second', 'third', {
-    #              'name': 'fourth', 'children': ['fifth', 'sixth']
-    #          }, 'seventh']}, 'eighth', 'ninth']
-    #     m = self.stuff.machine_cls(states=states)
-    #     m.add_ordered_transitions()
-    #     self.assertEqual(m.state, 'initial')
-    #     m.next_state()
-    #     self.assertEqual(m.state, 'first')
-    #     m.next_state()
-    #     m.next_state()
-    #     self.assertEqual(m.state, 'first{0}third'.format(State.separator))
-    #     m.next_state()
-    #     m.next_state()
-    #     self.assertEqual(m.state, 'first.fourth.fifth')
-    #     m.next_state()
-    #     m.next_state()
-    #     self.assertEqual(m.state, 'first{0}seventh'.format(State.separator))
-    #     m.next_state()
-    #     m.next_state()
-    #     self.assertEqual(m.state, 'ninth')
-
-    #     # Include initial state in loop
-    #     m = self.stuff.machine_cls('self', states)
-    #     m.add_ordered_transitions(loop_includes_initial=False)
-    #     m.to_ninth()
-    #     m.next_state()
-    #     self.assertEqual(m.state, 'first')
-
-    #     # Test user-determined sequence and event name
-    #     m = self.stuff.machine_cls('self', states, initial='first')
-    #     m.add_ordered_transitions(['first', 'ninth'], event='advance')
-    #     m.advance()
-    #     self.assertEqual(m.state, 'ninth')
-    #     m.advance()
-    #     self.assertEqual(m.state, 'first')
-
-    #     # Via init argument
-    #     m = Stuff.machine
-    #     m.next_state()
-    #     self.assertEqual(m.state, 'first{0}second'.format(State.separator))
-
-    # def test_callbacks_duplicate(self):
-
-    #     transitions = [
-    #         {'event': 'walk', 'from_state': 'A', 'to_state': 'C',
-    #          'before': 'before_change', 'after': 'after_change'},
-    #         {'event': 'run', 'from_state': 'B', 'to_state': 'C'}
-    #     ]
-
-    #     m = Stuff.machine(states=['A', 'B', 'C'], transitions=transitions,
-    #                                before_state_change='before_change',
-    #                                after_state_change='after_change',
-    #                                initial='A', auto_transitions=True)
-
-    #     m.before_change = MagicMock()
-    #     m.after_change = MagicMock()
-
-    #     m.walk()
-    #     self.assertEqual(m.before_change.call_count, 2)
-    #     self.assertEqual(m.after_change.call_count, 2)
-
-    # def test_with_custom_separator(self):
-    #     State.separator = '.'
-    #     self.setUp()
-    #     self.test_enter_exit_nested()
-    #     self.setUp()
-    #     self.test_state_change_listeners()
-    #     self.test_nested_auto_transitions()
-    #     State.separator = '.' if sys.version_info[0] < 3 else u'↦'
-    #     self.setUp()
-    #     self.test_enter_exit_nested()
-    #     self.setUp()
-    #     self.test_state_change_listeners()
-    #     self.test_nested_auto_transitions()
-
-    # def test_with_slash_separator(self):
-    #     State.separator = '/'
-    #     self.setUp()
-    #     self.test_enter_exit_nested()
-    #     self.setUp()
-    #     self.test_state_change_listeners()
-    #     self.test_nested_auto_transitions()
-    #     self.setUp()
-    #     self.test_ordered_transitions()
 
     # def test_nested_auto_transitions(self):
     #     s = self.stuff
@@ -300,34 +135,31 @@ class TestTransitions(TestCase):
     #     s.to(state)
     #     self.assertEqual(s.state, state)
 
-    # def test_example_one(self):
-    #     State.separator = '_'
-    #     states = [
-    #         'standing', 'walking',
-    #         {'name': 'caffeinated', 'children': ['dithering', 'running']}
-    #     ]
-    #     transitions = [['walk', 'standing', 'walking'],
-    #                    ['stop', 'walking', 'standing'],
-    #                    ['drink', '*', 'caffeinated'],
-    #                    ['walk', 'caffeinated', 'caffeinated_running'],
-    #                    ['relax', 'caffeinated', 'standing']]
-    #     m = Stuff.machine(states=states, initial='standing', name='Machine1')
+    def test_example_one(self):
+        states = [
+            'standing', 'walking',
+            {'name': 'caffeinated', 'children': ['dithering', 'running']}
+        ]
+        transitions = [['standing', 'walking', 'walk'],
+                       ['walking', 'standing', 'stop'],
+                       ['*', 'caffeinated', 'drink'],
+                       ['caffeinated', 'caffeinated.running', 'walk'],
+                       ['caffeinated', 'standing', 'relax']]
+        machine = Stuff.machine
+        machine.add_states(states=states, initial='standing')
+        machine.add_transitions(transitions)
 
-    #     machine.walk()   # Walking now
-    #     machine.stop()   # let's stop for a moment
-    #     machine.drink()  # coffee time
-    #     machine.state
-    #     self.assertEqual(machine.state, 'caffeinated')
-    #     machine.walk()   # we have to go faster
-    #     self.assertEqual(machine.state, 'caffeinated_running')
-    #     machine.stop()   # can't stop moving!
-    #     machine.state
-    #     self.assertEqual(machine.state, 'caffeinated_running')
-    #     machine.relax()  # leave nested state
-    #     machine.state    # phew, what a ride
-    #     self.assertEqual(machine.state, 'standing')
-    #     machine.to_caffeinated_running()  # auto transition fast track
-    #     machine.on_enter_caffeinated_running('callback_method')
+        s = Stuff()
+        s.dispatch(Event('walk'))
+        s.dispatch(Event('stop'))
+        s.dispatch(Event('drink'))
+        self.assertEqual(s.state, 'caffeinated')
+        s.dispatch(Event('walk'))
+        self.assertEqual(s.state, 'caffeinated.running')
+        with self.assertRaises(InvalidTransition):
+            s.dispatch(Event('stop'))
+        s.dispatch(Event('relax'))
+        self.assertEqual(s.state, 'standing')
 
     # def test_get_triggers(self):
     #     states = [
