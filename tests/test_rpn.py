@@ -1,5 +1,6 @@
 import string as py_string
 from collections import deque
+import operator
 
 from unittest import TestCase
 
@@ -22,6 +23,13 @@ class Result(State):
 
 @state_machine
 class Calculator(object):
+
+    operators = {
+        '+': operator.add,
+        '-': operator.sub,
+        '*': operator.mul,
+        '/': operator.div,
+    }
 
     def __init__(self):
         self.stack = deque()
@@ -52,7 +60,7 @@ class Calculator(object):
         y = self.stack.pop()
         x = self.stack.pop()
         # eval is evil
-        self.stack.append(eval('float(%s) %s float(%s)' % (x, operation, y)))
+        self.stack.append(self.operators[operation](float(x), float(y)))
 
     def do_equal(self):
         # '='
