@@ -127,14 +127,6 @@ class TestTransitions(TestCase):
         self.assertEqual(s.state, 'D')
         self.assertEqual(mock.call_count, 3)
 
-    # def test_nested_auto_transitions(self):
-    #     s = self.stuff
-    #     s.to_C()
-    #     self.assertEqual(s.state, 'C')
-    #     state = 'C{0}3{0}a'.format(State.separator)
-    #     s.to(state)
-    #     self.assertEqual(s.state, state)
-
     def test_example_one(self):
         states = [
             'standing', 'walking',
@@ -160,23 +152,3 @@ class TestTransitions(TestCase):
             s.dispatch(Event('stop'))
         s.dispatch(Event('relax'))
         self.assertEqual(s.state, 'standing')
-
-    # def test_get_triggers(self):
-    #     states = [
-    #         'standing', 'walking',
-    #         {'name': 'caffeinated', 'children': ['dithering', 'running']}]
-    #     transitions = [
-    #         ['walk', 'standing', 'walking'],
-    #         ['go', 'standing', 'walking'],
-    #         ['stop', 'walking', 'standing'],
-    #         {'event': 'drink', 'from_state': '*',
-    #          'to_state': 'caffeinated_dithering',
-    #          'conditions': 'is_hot', 'unless': 'is_too_hot'},
-    #         ['walk', 'caffeinated_dithering', 'caffeinated_running'],
-    #         ['relax', 'caffeinated', 'standing']
-    #     ]
-
-    #     m = Stuff.machine(states=states, transitions=transitions)
-    #     trans = machine.get_triggers('caffeinated.dithering')
-    #     self.assertEqual(len(trans), 3)
-    #     self.assertTrue('relax' in trans)

@@ -7,7 +7,7 @@ from .error import NoState
 from .error import InvalidState
 from .error import AlreadyHasState
 from .error import AlreadyHasInitialState
-from .utils import _nop
+from .utils import _nop, get_event_handlers
 
 
 class Event(object):
@@ -30,7 +30,7 @@ class State(object):
 
     def __init__(self, name, on_enter=None, on_exit=None):
         self.name = name
-        self.handlers = {}
+        self.handlers = get_event_handlers(self)
         self.enter = on_enter or _nop
         self.exit = on_exit or _nop
 
