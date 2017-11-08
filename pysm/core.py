@@ -69,15 +69,15 @@ class Machine(object):
             ))
         for transition in transitions:
             for cond, target in transition['conditions']:
-                if isinstance(cond, string_types):
+                if isinstance(cond, list):
                     predicate = instance
                     for pre in cond:
                         predicate = getattr(predicate, pre)
                 else:
                     predicate = cond
                 if callable(predicate):
-                    value = predicate(state, event)
-                if value != target:
+                    predicate = predicate(state, event)
+                if predicate != target:
                     break
             else:
                 return transition
@@ -145,7 +145,12 @@ class Machine(object):
     def _prepare_transition(self, from_state, to_state, event,
                             conditions=None, before=None, after=None):
         _conditions = []
-        for cond in conditions or []:
+        if conditions is not None:
+            if not isinstance(conditions, list):
+                conditions = [conditions]
+        else:
+            conditions = []
+        for cond in conditions:
             if isinstance(cond, string_types):
                 if cond.startswith('!'):
                     predicate, target = cond[1:].split('.'), False

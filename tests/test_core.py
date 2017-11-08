@@ -89,21 +89,38 @@ class TestCore(TestCase):
             m.add_transition('A', 'X', 'walk')
 
     def test_dispatch(self):
-        states = [State('State1'), 'State2', {'name': 'State3'}]
+        mock = MagicMock()
+
+        def callback(state, event):
+            mock()
+
+        state = State('State1')
+        state.handlers['advance'] = callback
+        states = [state, 'State2', {'name': 'State3'}]
         transitions = [
-            {
-                'event': 'advance',
-                'from_state': 'State2',
-                'to_state': 'State3'
-            }
+            {'event': 'advance', 'from_state': 'State1', 'to_state': 'State2',
+             'conditions': '!is_manager', 'after': callback},
+            {'event': 'advance', 'from_state': 'State1', 'to_state': 'State3',
+             'conditions': 'is_manager', 'after': 'on_advance'},
         ]
         m = Stuff.machine
         m.add_states(states)
         m.add_transitions(transitions)
-        m.set_initial_state('State2')
+        m.set_initial_state('State1')
+
         s = Stuff()
+        s.is_manager = False
+        s.dispatch(Event('advance'))
+        self.assertEqual(s.state, 'State2')
+        self.assertTrue(mock.called)
+        self.assertEqual(mock.call_count, 2)
+
+        s = Stuff()
+        s.is_manager = True
+        s.on_advance = callback
         s.dispatch(Event('advance'))
         self.assertEqual(s.state, 'State3')
+        self.assertEqual(mock.call_count, 4)
 
     # def test_add_custom_state(self):
     #     s = self.stuff
