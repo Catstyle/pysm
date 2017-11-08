@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# import sys
 from unittest import TestCase
 try:
     from unittest.mock import MagicMock
@@ -18,7 +17,7 @@ class Stuff(object):
     pass
 
 
-class TestTransitions(TestCase):
+class TestNested(TestCase):
 
     def setUp(self):
         Stuff.machine._reset()
