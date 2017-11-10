@@ -53,15 +53,15 @@ class NestedMachine(Machine):
             target = target.parent
         for transition in transitions:
             for cond, target in transition['conditions']:
-                if isinstance(cond, string_types):
+                if isinstance(cond, list):
                     predicate = instance
                     for pre in cond:
                         predicate = getattr(predicate, pre)
                 else:
                     predicate = cond
                 if callable(predicate):
-                    value = predicate(state, event)
-                if value != target:
+                    predicate = predicate(state, event)
+                if predicate != target:
                     break
             else:
                 return transition
