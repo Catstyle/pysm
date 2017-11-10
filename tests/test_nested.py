@@ -7,7 +7,7 @@ except ImportError:
 
 from pysm.core import Event, state_machine
 from pysm.nested import NestedState, NestedMachine
-from pysm.error import AlreadyHasInitialState, InvalidTransition
+from pysm import error
 
 state_separator = NestedState.separator
 
@@ -34,29 +34,38 @@ class TestNested(TestCase):
         self.assertIsNotNone(m.initial)
         self.assertEqual(m.initial, 'A')
 
-        with self.assertRaises(AlreadyHasInitialState):
+        with self.assertRaises(error.AlreadyHasInitialState):
             m.set_initial_state('C')
         m.set_initial_state('C', force=True)
         self.assertEqual(m.initial, 'C')
 
-    def test_dispatch(self):
-        states = [NestedState('State1'), 'State2', {'name': 'State3'}]
-        transitions = [
-            {
-                'event': 'advance',
-                'from_state': 'State2',
-                'to_state': 'State3'
-            }
-        ]
-        m = Stuff.machine
-        m.add_states(states)
-        m.add_transitions(transitions)
-        m.set_initial_state('State2')
-        s = Stuff()
-        s.dispatch(Event('advance'))
-        self.assertEqual(s.state, 'State3')
+        m.set_initial_state('C.1', force=True)
+        self.assertEqual(m.initial, 'C.1')
+        with self.assertRaises(error.NoState):
+            m.set_initial_state('C.0', force=True)
 
-    def test_transition_definitions(self):
+    def test_add_state(self):
+        m = Stuff.machine
+        self.assertDictEqual(m.states, {})
+
+        states = ['A', 'B', {'name': 'C', 'children': ['1', '2']}, 'D']
+        m.add_states(states)
+        self.assertTrue(len(m.states) == 6, m.states)
+
+        with self.assertRaises(error.AlreadyHasState):
+            m.add_state('C.1')
+
+    def test_get_state(self):
+        states = ['A', 'B', {'name': 'C', 'children': ['1', '2']}, 'D']
+        m = Stuff.machine
+        m.add_states(states, initial='A', force=True)
+        self.assertIsNotNone(m.get_state('A'))
+        self.assertIsNotNone(m.get_state('C.1'))
+
+        with self.assertRaises(error.NoState):
+            m.get_state('C.0')
+
+    def test_add_transition(self):
         states = ['A', 'B', {'name': 'C', 'children': ['1', '2', '3']}, 'D']
         # Define with list of dictionaries
         transitions = [
@@ -68,14 +77,7 @@ class TestNested(TestCase):
         m = Stuff.machine
         m.add_states(states, initial='A', force=True)
         m.add_transitions(transitions)
-
-        s = Stuff()
-        s.dispatch(Event('walk'))
-        self.assertEqual(s.state, 'B')
-        s.dispatch(Event('run'))
-        self.assertEqual(s.state, 'C')
-        s.dispatch(Event('run'))
-        self.assertEqual(s.state, 'C.1')
+        self.assertEqual(len(m.transitions), 4)
 
         # Define with list of lists
         transitions = [
@@ -87,11 +89,53 @@ class TestNested(TestCase):
         m.add_states(states, initial='A')
         m.add_transitions(transitions)
 
+        with self.assertRaises(error.NoState):
+            m.add_transition('C.0', 'B', 'walk')
+
+        with self.assertRaises(error.NoState):
+            m.add_transition('A', 'C.0', 'walk')
+
+    def test_dispatch(self):
+        mock = MagicMock()
+
+        def callback(state, event):
+            mock()
+
+        def master(state, event):
+            return event.instance.is_manager
+
+        state = NestedState('A')
+        state.handlers['advance'] = callback
+        states = [state, 'B', {'name': 'C', 'children': ['1', '2']}]
+        transitions = [
+            {'event': 'advance', 'from_state': 'A', 'to_state': 'B',
+             'conditions': '!is_manager', 'after': callback},
+            {'event': 'advance', 'from_state': 'A', 'to_state': 'C.1',
+             'conditions': 'is_manager', 'after': 'on_advance'},
+            {'event': 'advance', 'from_state': 'B', 'to_state': 'C.2',
+             'conditions': master},
+        ]
+        m = Stuff.machine
+        m.add_states(states)
+        m.add_transitions(transitions)
+        m.set_initial_state('A')
+
         s = Stuff()
-        s.dispatch(Event('walk'))
-        s.dispatch(Event('run'))
-        s.dispatch(Event('sprint'))
-        self.assertEqual(s.state, 'D')
+        s.is_manager = False
+        s.dispatch(Event('advance'))
+        self.assertEqual(s.state, 'B')
+        self.assertTrue(mock.called)
+        self.assertEqual(mock.call_count, 2)
+
+        s.is_manager = True
+        s.dispatch(Event('advance'))
+        self.assertEqual(s.state, 'C.2')
+
+        s = Stuff()
+        s.is_manager = True
+        s.on_advance = callback
+        s.dispatch(Event('advance'))
+        self.assertEqual(s.state, 'C.1')
 
     # def test_add_custom_state(self):
     #     s = self.stuff
@@ -147,7 +191,7 @@ class TestNested(TestCase):
         self.assertEqual(s.state, 'caffeinated')
         s.dispatch(Event('walk'))
         self.assertEqual(s.state, 'caffeinated.running')
-        with self.assertRaises(InvalidTransition):
+        with self.assertRaises(error.InvalidTransition):
             s.dispatch(Event('stop'))
         s.dispatch(Event('relax'))
         self.assertEqual(s.state, 'standing')
