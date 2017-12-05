@@ -95,14 +95,14 @@ class NestedMachine(Machine):
             path.append(state.parent)
             state = state.parent
         for state in reversed(path):
-            state.enter(from_state, event)
+            state.on_enter(from_state, event)
 
     def _exit_state(self, state, to_state, event):
         event.instance.state_stack.append(state)
-        state.exit(to_state, event)
+        state.on_exit(to_state, event)
         top_state = self._get_top_state(state, to_state)
         while state.parent and state.parent != top_state:
-            state.parent.exit(to_state, event)
+            state.parent.on_exit(to_state, event)
             state = state.parent
         event.instance.state = None
         event.cargo['top_state'] = top_state
@@ -114,7 +114,7 @@ class NestedMachine(Machine):
 
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.enter(None, Event('initialize'))
+        state.on_enter(None, Event('initialize'))
         setattr(instance, 'dispatch', partial(self.dispatch, instance))
 
     def traverse(self, states, parent=None, remap={}):

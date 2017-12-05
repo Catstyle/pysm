@@ -7,7 +7,7 @@ from .error import NoState
 from .error import InvalidState
 from .error import AlreadyHasState
 from .error import AlreadyHasInitialState
-from .utils import _nop, get_event_handlers
+from .utils import get_event_handlers
 
 
 class Event(object):
@@ -31,13 +31,19 @@ class State(object):
     def __init__(self, name, on_enter=None, on_exit=None):
         self.name = name
         self.handlers = get_event_handlers(self)
-        self.enter = on_enter or _nop
-        self.exit = on_exit or _nop
+        self.on_enter = on_enter or self.on_enter
+        self.on_exit = on_exit or self.on_exit
 
     def _on(self, event):
         if event.name in self.handlers:
             event.propagate = False
             self.handlers[event.name](self, event)
+
+    def on_enter(self, state, event):
+        pass
+
+    def on_exit(self, state, event):
+        pass
 
     def __repr__(self):
         return '<State {}, handlers={}>'.format(
@@ -85,10 +91,10 @@ class Machine(object):
 
     def _enter_state(self, state, from_state, event):
         event.instance.state = state.name
-        state.enter(from_state, event)
+        state.on_enter(from_state, event)
 
     def _exit_state(self, state, to_state, event):
-        state.exit(to_state, event)
+        state.on_exit(to_state, event)
         event.instance.state = None
 
     def _switch_state(self, instance, to_state, event=None):
@@ -112,7 +118,7 @@ class Machine(object):
 
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.enter(None, Event('initialize'))
+        state.on_enter(None, Event('initialize'))
         setattr(instance, 'dispatch', partial(self.dispatch, instance))
 
     def _reset(self):
@@ -163,8 +169,8 @@ class Machine(object):
             'from_state': from_state,
             'to_state': to_state,
             'conditions': _conditions,
-            'before': before or _nop,
-            'after': after or _nop,
+            'before': before,
+            'after': after,
         }
 
     def add_state(self, name, state=None, force=False):
@@ -269,7 +275,7 @@ class Machine(object):
     def reinit_instance(self, instance):
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.enter(None, Event('reinit', instance))
+        state.on_enter(None, Event('reinit', instance))
 
     def dispatch(self, instance, event):
         '''Dispatch an event to a state machine.
@@ -295,13 +301,15 @@ class Machine(object):
         before = transition['before']
         if isinstance(before, string_types):
             before = getattr(instance, before)
-        before(state, event)
+        if before:
+            before(state, event)
         self._exit_state(state, to_state, event)
         self._enter_state(to_state, state, event)
         after = transition['after']
         if isinstance(after, string_types):
             after = getattr(instance, after)
-        after(to_state, event)
+        if after:
+            after(to_state, event)
 
     def __repr__(self):
         return '<Machine: {}, states: {}>'.format(
