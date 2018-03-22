@@ -36,7 +36,6 @@ class State(object):
 
     def _on(self, event):
         if event.name in self.handlers:
-            event.propagate = False
             self.handlers[event.name](self, event)
 
     def on_enter(self, state, event):

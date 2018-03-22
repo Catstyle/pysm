@@ -22,7 +22,6 @@ class NestedState(State):
 
     def _on(self, event):
         if event.name in self.handlers:
-            event.propagate = False
             self.handlers[event.name](self, event)
         if self.parent and event.propagate:
             self.parent._on(event)

@@ -1,6 +1,7 @@
-import string as py_string
 from collections import deque
 import operator
+import six
+import string as py_string
 
 from unittest import TestCase
 
@@ -14,8 +15,11 @@ class Calculator(object):
         '+': operator.add,
         '-': operator.sub,
         '*': operator.mul,
-        '/': operator.div,
     }
+    if six.PY3:
+        operators['/'] = operator.truediv
+    else:
+        operators['/'] = operator.div
 
     def __init__(self):
         self.stack = deque()
