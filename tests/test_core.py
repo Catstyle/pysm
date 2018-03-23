@@ -72,7 +72,7 @@ class TestCore(TestCase):
         m = Stuff.machine
         m.add_states(states, initial='A', force=True)
         m.add_transitions(transitions)
-        self.assertEqual(len(m.transitions), 4)
+        self.assertEqual(len(m.transitions), 8)
 
         # Define with list of lists
         transitions = [
@@ -176,19 +176,3 @@ class TestCore(TestCase):
             dispatch(s, Event('stop'))
         dispatch(s, Event('relax'))
         self.assertEqual(s.state, 'standing')
-
-    def test_switch_state(self):
-        # private api
-        states = ['A', 'B', 'C', 'D']
-        transitions = [['A', 'C', 'go'], ['C', 'D', 'go']]
-
-        m = Stuff.machine
-        m.add_states(states=states, initial='A')
-        m.add_transitions(transitions)
-
-        s = Stuff()
-        with self.assertRaises(error.InvalidTransition):
-            dispatch(s, Event('run'))
-
-        m._switch_state(s, 'B')
-        self.assertEqual(s.state, 'B')

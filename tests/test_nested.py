@@ -78,7 +78,7 @@ class TestNested(TestCase):
         m = Stuff.machine
         m.add_states(states, initial='A', force=True)
         m.add_transitions(transitions)
-        self.assertEqual(len(m.transitions), 4)
+        self.assertEqual(len(m.transitions), 11)
 
         # Define with list of lists
         transitions = [

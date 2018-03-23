@@ -1,8 +1,11 @@
 from unittest import TestCase
 
-from pysm.utils import on_event, get_event_handlers
+from pysm.core import Event, state_machine
+from pysm import error
+from pysm.utils import on_event, get_event_handlers, dispatch
 
 
+@state_machine('test')
 class Stuff(object):
 
     @on_event('off_duty')
@@ -13,11 +16,25 @@ class Stuff(object):
 class TestUtils(TestCase):
 
     def test_on_event(self):
-        stuff = Stuff()
-        self.assertEqual(stuff.off_duty.on_event, 'off_duty')
+        self.assertEqual(Stuff.off_duty.on_event, 'off_duty')
 
     def test_get_event_handlers(self):
-        stuff = Stuff()
         self.assertDictEqual(
-            get_event_handlers(stuff), {'off_duty': stuff.off_duty}
+            get_event_handlers(Stuff), {'off_duty': Stuff.off_duty}
         )
+
+    def test_switch_state(self):
+        # private handling
+        states = ['A', 'B', 'C', 'D']
+        transitions = [['A', 'C', 'go'], ['C', 'D', 'go']]
+
+        m = Stuff.machine
+        m.add_states(states=states, initial='A')
+        m.add_transitions(transitions)
+
+        s = Stuff()
+        with self.assertRaises(error.InvalidTransition):
+            dispatch(s, Event('run'))
+
+        dispatch(s, Event('__switch__', input='B'))
+        self.assertEqual(s.state, 'B')

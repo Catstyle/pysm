@@ -65,12 +65,12 @@ class Machine(object):
         return self.StateClass(name, *args, **kwargs)
 
     def _get_transition(self, state, event):
-        instance = event.instance
         transitions = self.transitions[(state.name, event.name)]
         if not transitions:
             raise InvalidTransition('{} cannot handle event {}'.format(
                 state, event
             ))
+        instance = event.instance
         for transition in transitions:
             for cond, target in transition['conditions']:
                 if isinstance(cond, list):
@@ -94,13 +94,6 @@ class Machine(object):
     def _exit_state(self, state, to_state, event):
         state.on_exit(state, event, to_state)
         event.instance.state = None
-
-    def _switch_state(self, instance, to_state, event=None):
-        event = event or Event('switch', instance)
-        from_state = self.states[instance.state]
-        to_state = self.states[to_state]
-        self._exit_state(from_state, to_state, event)
-        self._enter_state(to_state, from_state, event)
 
     def _init_instance(self, instance):
         '''Initialize states in the state machine.
@@ -151,6 +144,8 @@ class Machine(object):
                 conditions = [conditions]
         else:
             conditions = []
+        if from_state == '*' and event == '__switch__':
+            conditions.append(lambda state, event: event.input == to_state)
         for cond in conditions:
             if isinstance(cond, string_types):
                 if cond.startswith('!'):
@@ -181,6 +176,8 @@ class Machine(object):
         state = state or self._create_state(name)
         self._validate_add_state(name, state, force)
         self.states[name] = state
+        # for internal use only
+        self.add_transition('*', name, '__switch__')
 
     def add_states(self, states, initial=None, force=False):
         for state in states:
@@ -202,7 +199,7 @@ class Machine(object):
 
     def get_state(self, state_name):
         if state_name not in self.states:
-            raise NoState('{} has no such state {}'.format(self, state_name))
+            raise NoState('{} has no such state: {}'.format(self, state_name))
         return self.states[state_name]
 
     def set_initial_state(self, state_name, force=False):
@@ -269,12 +266,12 @@ class Machine(object):
             from_state, to_state, event, conditions, before, after
         )
         if from_state == '*':
-            self.wildcard_transitions[event].append(transition)
+            transitions = self.wildcard_transitions[event]
+            transitions.append(transition)
+            for from_state in self.states:
+                self.transitions[(from_state, event)] = transitions
         else:
             self.transitions[(from_state, event)].append(transition)
-        for event, transitions in self.wildcard_transitions.items():
-            for from_state in self.states:
-                self.transitions[(from_state, event)].extend(transitions)
 
     def add_transitions(self, transitions):
         for transition in transitions:
