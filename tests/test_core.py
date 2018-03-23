@@ -7,9 +7,10 @@ except ImportError:
 
 from pysm.core import Machine, State, Event, state_machine
 from pysm import error
+from pysm.utils import dispatch
 
 
-@state_machine('test', Machine)
+@state_machine('test', machine_class=Machine)
 class Stuff(object):
     pass
 
@@ -110,7 +111,7 @@ class TestCore(TestCase):
 
         s = Stuff()
         s.is_manager = False
-        s.dispatch(Event('advance'))
+        dispatch(s, Event('advance'))
         self.assertEqual(s.state, 'State2')
         self.assertTrue(mock.called)
         self.assertEqual(mock.call_count, 2)
@@ -118,22 +119,24 @@ class TestCore(TestCase):
         s = Stuff()
         s.is_manager = True
         s.on_advance = callback
-        s.dispatch(Event('advance'))
+        dispatch(s, Event('advance'))
         self.assertEqual(s.state, 'State3')
         self.assertEqual(mock.call_count, 4)
 
-    # def test_add_custom_state(self):
-    #     s = self.stuff
-    #     s.machine.add_states([{'name': 'E', 'children': ['1', '2', '3']}])
-    #     s.machine.add_transition('go', '*', 'E%s1' % State.separator)
-    #     s.machine.add_transition('run', 'E', 'C.3.a')
-    #     s.go()
-    #     s.run()
+    def test_clone(self):
+        m = Stuff.machine
+        m.add_states(['A', 'B', 'C'], initial='A')
+        m.add_transitions([['A', 'C', 'go'], ['B', 'C', 'go']])
+
+        mc = m.clone()
+        self.assertListEqual(list(m.states.keys()), list(mc.states.keys()))
+        mc.add_state('D')
+        self.assertNotEquals(list(m.states.keys()), list(mc.states.keys()))
 
     def test_enter_exit_state(self):
         mock = MagicMock()
 
-        def callback(state, event):
+        def callback(state, event, other_state):
             mock()
         states = [
             'A', 'B',
@@ -146,11 +149,11 @@ class TestCore(TestCase):
         m.add_states(states=states, initial='A')
         m.add_transitions(transitions)
         s = Stuff()
-        s.dispatch(Event('go'))
+        dispatch(s, Event('go'))
         self.assertEqual(s.state, 'C')
         self.assertTrue(mock.called)
         self.assertEqual(mock.call_count, 1)
-        s.dispatch(Event('go'))
+        dispatch(s, Event('go'))
         self.assertEqual(s.state, 'D')
         self.assertEqual(mock.call_count, 2)
 
@@ -165,13 +168,13 @@ class TestCore(TestCase):
         machine.add_transitions(transitions)
 
         s = Stuff()
-        s.dispatch(Event('walk'))
-        s.dispatch(Event('stop'))
-        s.dispatch(Event('drink'))
+        dispatch(s, Event('walk'))
+        dispatch(s, Event('stop'))
+        dispatch(s, Event('drink'))
         self.assertEqual(s.state, 'caffeinated')
         with self.assertRaises(error.InvalidTransition):
-            s.dispatch(Event('stop'))
-        s.dispatch(Event('relax'))
+            dispatch(s, Event('stop'))
+        dispatch(s, Event('relax'))
         self.assertEqual(s.state, 'standing')
 
     def test_switch_state(self):
@@ -185,7 +188,7 @@ class TestCore(TestCase):
 
         s = Stuff()
         with self.assertRaises(error.InvalidTransition):
-            s.dispatch(Event('run'))
+            dispatch(s, Event('run'))
 
         m._switch_state(s, 'B')
         self.assertEqual(s.state, 'B')

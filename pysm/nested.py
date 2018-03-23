@@ -1,8 +1,6 @@
-from collections import deque, defaultdict
-from functools import partial
 from six import string_types
 
-from .core import Event, State, Machine
+from .core import State, Machine
 from .error import InvalidTransition
 
 
@@ -41,8 +39,7 @@ class NestedMachine(Machine):
         instance = event.instance
         target = state
         while 1:
-            key = (target.name, event.name)
-            transitions = instance.transitions[key] + self.transitions[key]
+            transitions = self.transitions[(target.name, event.name)]
             if transitions:
                 break
             if not target.parent:
@@ -94,27 +91,16 @@ class NestedMachine(Machine):
             path.append(state.parent)
             state = state.parent
         for state in reversed(path):
-            state.on_enter(from_state, event)
+            state.on_enter(state, event, from_state)
 
     def _exit_state(self, state, to_state, event):
-        event.instance.state_stack.append(state)
-        state.on_exit(to_state, event)
+        state.on_exit(state, event, to_state)
         top_state = self._get_top_state(state, to_state)
         while state.parent and state.parent != top_state:
-            state.parent.on_exit(to_state, event)
             state = state.parent
+            state.on_exit(state, event, to_state)
         event.instance.state = None
         event.cargo['top_state'] = top_state
-
-    def _init_instance(self, instance):
-        instance.states = {}
-        instance.transitions = defaultdict(list)
-        instance.state_stack = deque(maxlen=self.STACK_SIZE)
-
-        state = self.get_state(self.initial)
-        instance.state = state.name
-        state.on_enter(None, Event('initialize'))
-        setattr(instance, 'dispatch', partial(self.dispatch, instance))
 
     def traverse(self, states, parent=None, remap={}):
         new_states = []
@@ -164,34 +150,34 @@ class NestedMachine(Machine):
         states = self.traverse(states)
         super(NestedMachine, self).add_states(states, initial, force)
 
-    def set_previous_leaf_state(self, event=None):
-        '''Transition to a previous leaf state. This makes a dynamic transition
-        to a historical state. The current `leaf_state` is saved on the stack
-        of historical leaf states when calling this method.
+    # def set_previous_leaf_state(self, event=None):
+    #     '''Transition to a previous leaf state. This makes a dynamic transition  # noqa
+    #     to a historical state. The current `leaf_state` is saved on the stack
+    #     of historical leaf states when calling this method.
 
-        :param event: (Optional) event that is passed to states involved in the
-            transition
-        :type event: :class:`.Event`
+    #     :param event: (Optional) event that is passed to states involved in the  # noqa
+    #         transition
+    #     :type event: :class:`.Event`
 
-        '''
-        if event is not None:
-            event.state_machine = self
-        from_state = self.leaf_state
-        try:
-            to_state = self.state_stack[-1]
-        except IndexError:
-            return
-        top_state = self._exit_states(event, from_state, to_state)
-        self._enter_states(event, top_state, to_state)
+    #     '''
+    #     if event is not None:
+    #         event.state_machine = self
+    #     from_state = self.leaf_state
+    #     try:
+    #         to_state = self.state_stack[-1]
+    #     except IndexError:
+    #         return
+    #     top_state = self._exit_states(event, from_state, to_state)
+    #     self._enter_states(event, top_state, to_state)
 
-    def revert_to_previous_leaf_state(self, event=None):
-        '''Similar to :func:`set_previous_leaf_state`
-        but the current leaf_state is not saved on the stack of states. It
-        allows to perform transitions further in the history of states.
+    # def revert_to_previous_leaf_state(self, event=None):
+    #     '''Similar to :func:`set_previous_leaf_state`
+    #     but the current leaf_state is not saved on the stack of states. It
+    #     allows to perform transitions further in the history of states.
 
-        '''
-        self.set_previous_leaf_state(event)
-        try:
-            self.state_stack.pop()
-        except IndexError:
-            return
+    #     '''
+    #     self.set_previous_leaf_state(event)
+    #     try:
+    #         self.state_stack.pop()
+    #     except IndexError:
+    #         return

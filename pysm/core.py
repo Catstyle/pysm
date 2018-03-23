@@ -1,5 +1,5 @@
 from collections import defaultdict
-from functools import partial
+from copy import deepcopy
 from six import string_types
 
 from .error import InvalidTransition
@@ -28,20 +28,20 @@ class Event(object):
 
 class State(object):
 
-    def __init__(self, name, on_enter=None, on_exit=None):
-        self.name = name
+    def __init__(self, name='', on_enter=None, on_exit=None):
+        self.name = name or self.__class__.__name__
         self.handlers = get_event_handlers(self)
-        self.on_enter = on_enter or self.on_enter
-        self.on_exit = on_exit or self.on_exit
+        self.on_enter = on_enter or self.__class__.on_enter
+        self.on_exit = on_exit or self.__class__.on_exit
 
     def _on(self, event):
         if event.name in self.handlers:
             self.handlers[event.name](self, event)
 
-    def on_enter(self, state, event):
+    def on_enter(self, event, from_state):
         pass
 
-    def on_exit(self, state, event):
+    def on_exit(self, event, to_state):
         pass
 
     def __repr__(self):
@@ -66,8 +66,7 @@ class Machine(object):
 
     def _get_transition(self, state, event):
         instance = event.instance
-        key = (state.name, event.name)
-        transitions = instance.transitions[key] + self.transitions[key]
+        transitions = self.transitions[(state.name, event.name)]
         if not transitions:
             raise InvalidTransition('{} cannot handle event {}'.format(
                 state, event
@@ -89,18 +88,18 @@ class Machine(object):
         return None
 
     def _enter_state(self, state, from_state, event):
+        state.on_enter(state, event, from_state)
         event.instance.state = state.name
-        state.on_enter(from_state, event)
 
     def _exit_state(self, state, to_state, event):
-        state.on_exit(to_state, event)
+        state.on_exit(state, event, to_state)
         event.instance.state = None
 
     def _switch_state(self, instance, to_state, event=None):
         event = event or Event('switch', instance)
         from_state = self.states[instance.state]
-        self._exit_state(from_state, to_state, event)
         to_state = self.states[to_state]
+        self._exit_state(from_state, to_state, event)
         self._enter_state(to_state, from_state, event)
 
     def _init_instance(self, instance):
@@ -112,18 +111,15 @@ class Machine(object):
         Note: should not called from outside, this method would reset instance
         attributes
         '''
-        instance.states = {}
-        instance.transitions = defaultdict(list)
-
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.on_enter(None, Event('initialize'))
-        setattr(instance, 'dispatch', partial(self.dispatch, instance))
+        state.on_enter(state, Event('initialize'), None)
 
     def _reset(self):
         self.initial = None
         self.states = {}
         self.transitions = defaultdict(list)
+        self.wildcard_transitions = defaultdict(list)
 
     def _validate_add_state(self, state_name, state, force):
         if not isinstance(state, State):
@@ -172,6 +168,15 @@ class Machine(object):
             'after': after,
         }
 
+    def clone(self):
+        ins = self.__class__(self.name)
+        ins.name = self.name
+        ins.initial = self.initial
+        ins.states = deepcopy(self.states)
+        ins.transitions = deepcopy(self.transitions)
+        ins.wildcard_transitions = deepcopy(self.wildcard_transitions)
+        return ins
+
     def add_state(self, name, state=None, force=False):
         state = state or self._create_state(name)
         self._validate_add_state(name, state, force)
@@ -186,6 +191,9 @@ class Machine(object):
                 self.add_state(state.name, state, force=force)
             elif isinstance(state, State):
                 self.add_state(state.name, state, force=force)
+            elif issubclass(state, State):
+                state = state()
+                self.add_state(state.name, state, force=force)
         if initial:
             self.set_initial_state(initial, force=force)
 
@@ -198,6 +206,10 @@ class Machine(object):
         return self.states[state_name]
 
     def set_initial_state(self, state_name, force=False):
+        if isinstance(state_name, State):
+            state_name = state_name.name
+        elif isinstance(state_name, type) and issubclass(state_name, State):
+            state_name = state_name.__name__
         self._validate_initial_state(state_name, force)
         self.initial = state_name
 
@@ -274,41 +286,7 @@ class Machine(object):
     def reinit_instance(self, instance):
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.on_enter(None, Event('reinit', instance))
-
-    def dispatch(self, instance, event):
-        '''Dispatch an event to a state machine.
-
-        If using nested state machines (HSM), it has to be called on a root
-        state machine in the hierarchy.
-
-        :param event: Event to be dispatched
-        :type event: :class:`.Event`
-
-        '''
-        get_state = self.get_state
-        state_name = instance.state
-        state = instance.states.get(state_name) or get_state(state_name)
-        event.instance = instance
-        state._on(event)
-        transition = self._get_transition(state, event)
-        if transition is None:
-            return
-        to_state = transition['to_state']
-        to_state = instance.states.get(to_state) or get_state(to_state)
-
-        before = transition['before']
-        if isinstance(before, string_types):
-            before = getattr(instance, before)
-        if before:
-            before(state, event)
-        self._exit_state(state, to_state, event)
-        self._enter_state(to_state, state, event)
-        after = transition['after']
-        if isinstance(after, string_types):
-            after = getattr(instance, after)
-        if after:
-            after(to_state, event)
+        state._on(Event('reinit', instance))
 
     def __repr__(self):
         return '<Machine: {}, states: {}>'.format(

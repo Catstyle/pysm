@@ -8,11 +8,12 @@ except ImportError:
 from pysm.core import Event, state_machine
 from pysm.nested import NestedState, NestedMachine
 from pysm import error
+from pysm.utils import dispatch
 
 state_separator = NestedState.separator
 
 
-@state_machine('test', NestedMachine)
+@state_machine('test', machine_class=NestedMachine)
 class Stuff(object):
     pass
 
@@ -122,19 +123,19 @@ class TestNested(TestCase):
 
         s = Stuff()
         s.is_manager = False
-        s.dispatch(Event('advance'))
+        dispatch(s, Event('advance'))
         self.assertEqual(s.state, 'B')
         self.assertTrue(mock.called)
         self.assertEqual(mock.call_count, 2)
 
         s.is_manager = True
-        s.dispatch(Event('advance'))
+        dispatch(s, Event('advance'))
         self.assertEqual(s.state, 'C.2')
 
         s = Stuff()
         s.is_manager = True
         s.on_advance = callback
-        s.dispatch(Event('advance'))
+        dispatch(s, Event('advance'))
         self.assertEqual(s.state, 'C.1')
 
     # def test_add_custom_state(self):
@@ -148,7 +149,7 @@ class TestNested(TestCase):
     def test_enter_exit_nested_state(self):
         mock = MagicMock()
 
-        def callback(state, event):
+        def callback(state, event, other_state):
             mock()
         states = [
             'A', 'B',
@@ -162,11 +163,11 @@ class TestNested(TestCase):
         m.add_states(states=states, initial='A')
         m.add_transitions(transitions)
         s = Stuff()
-        s.dispatch(Event('go'))
+        dispatch(s, Event('go'))
         self.assertEqual(s.state, 'C.1')
         self.assertTrue(mock.called)
         self.assertEqual(mock.call_count, 1)
-        s.dispatch(Event('go'))
+        dispatch(s, Event('go'))
         self.assertEqual(s.state, 'D')
         self.assertEqual(mock.call_count, 3)
 
@@ -185,13 +186,13 @@ class TestNested(TestCase):
         machine.add_transitions(transitions)
 
         s = Stuff()
-        s.dispatch(Event('walk'))
-        s.dispatch(Event('stop'))
-        s.dispatch(Event('drink'))
+        dispatch(s, Event('walk'))
+        dispatch(s, Event('stop'))
+        dispatch(s, Event('drink'))
         self.assertEqual(s.state, 'caffeinated')
-        s.dispatch(Event('walk'))
+        dispatch(s, Event('walk'))
         self.assertEqual(s.state, 'caffeinated.running')
         with self.assertRaises(error.InvalidTransition):
-            s.dispatch(Event('stop'))
-        s.dispatch(Event('relax'))
+            dispatch(s, Event('stop'))
+        dispatch(s, Event('relax'))
         self.assertEqual(s.state, 'standing')

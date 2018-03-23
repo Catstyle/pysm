@@ -6,6 +6,7 @@ import string as py_string
 from unittest import TestCase
 
 from pysm import Event, state_machine
+from pysm.utils import dispatch
 
 
 @state_machine('calculator')
@@ -33,7 +34,7 @@ class Calculator(object):
     def calculate(self, string):
         self.reset()
         for char in string:
-            self.dispatch(Event('parse', input=char))
+            dispatch(self, Event('parse', input=char))
         return self.result
 
     def start_building_number(self, state, event):

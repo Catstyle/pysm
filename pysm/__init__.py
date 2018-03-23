@@ -31,8 +31,13 @@ Goals:
 '''
 
 from .core import State, Machine, Event, state_machine
+from .nested import NestedState, NestedMachine
+from .utils import on_event, add_state, add_states
 
 
-__all__ = ['state_machine', 'State', 'Machine', 'Event']
+__all__ = [
+    'state_machine', 'add_states', 'add_state', 'on_event',
+    'State', 'Machine', 'Event', 'NestedState', 'NestedMachine',
+]
 
-__version__ = '0.4.2'
+__version__ = '0.5.0a1'
