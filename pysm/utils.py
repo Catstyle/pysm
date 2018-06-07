@@ -4,7 +4,7 @@ from six import string_types
 def on_event(name):
     def wrapper(func):
         func.on_event = name
-        return func
+        return staticmethod(func)
     return wrapper
 
 
@@ -54,9 +54,8 @@ def dispatch(instance, event):
     '''
     machine = instance.machine
     state = machine.get_state(instance.state)
-    event.instance = instance
-    state._on(event)
-    transition = machine._get_transition(state, event)
+    state._on(event, instance)
+    transition = machine._get_transition(state, event, instance)
     if transition is None:
         return
     to_state = machine.get_state(transition['to_state'])
@@ -65,11 +64,11 @@ def dispatch(instance, event):
     if isinstance(before, string_types):
         before = getattr(instance, before)
     if before:
-        before(state, event)
-    machine._exit_state(state, to_state, event)
-    machine._enter_state(to_state, state, event)
+        before(state, event, instance)
+    machine._exit_state(state, event, instance, to_state)
+    machine._enter_state(to_state, event, instance, state)
     after = transition['after']
     if isinstance(after, string_types):
         after = getattr(instance, after)
     if after:
-        after(to_state, event)
+        after(to_state, event, instance)

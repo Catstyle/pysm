@@ -1,7 +1,7 @@
 from collections import deque
 import operator
 import six
-import string as py_string
+from string import whitespace, digits
 
 from unittest import TestCase
 
@@ -37,29 +37,29 @@ class Calculator(object):
             dispatch(self, Event('parse', input=char))
         return self.result
 
-    def start_building_number(self, state, event):
+    def start_building_number(self, state, event, instance):
         digit = event.input
         self.stack.append(int(digit))
 
-    def build_number(self, state, event):
+    def build_number(self, state, event, instance):
         digit = event.input
         number = str(self.stack.pop())
         number += digit
         self.stack.append(int(number))
 
-    def do_operation(self, state, event):
+    def do_operation(self, state, event, instance):
         operation = event.input
         y = self.stack.pop()
         x = self.stack.pop()
         self.stack.append(self.operators[operation](float(x), float(y)))
 
-    def do_equal(self, state, event):
+    def do_equal(self, state, event, instance):
         number = self.stack.pop()
         self.result = number
 
 
-def is_digit(state, event):
-    return event.input in py_string.digits
+def is_digit(state, event, instance):
+    return event.input in digits
 
 
 sm = Calculator.machine
@@ -71,12 +71,12 @@ sm.add_transitions([
     {'from_state': 'number', 'to_state': 'number', 'event': 'parse',
      'conditions': [is_digit], 'before': 'build_number'},
     {'from_state': 'number', 'to_state': 'initial', 'event': 'parse',
-     'conditions': [lambda state, evt: evt.input in py_string.whitespace]},
+     'conditions': [lambda state, evt, ins: evt.input in whitespace]},
     {'from_state': 'initial', 'to_state': 'initial', 'event': 'parse',
-     'conditions': [lambda state, evt: evt.input in '+-*/'],
+     'conditions': [lambda state, evt, ins: evt.input in '+-*/'],
      'before': 'do_operation'},
     {'from_state': 'initial', 'to_state': 'result', 'event': 'parse',
-     'conditions': [lambda state, evt: evt.input == '='],
+     'conditions': [lambda state, evt, ins: evt.input == '='],
      'before': 'do_equal'},
 ])
 

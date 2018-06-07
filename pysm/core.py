@@ -12,12 +12,12 @@ from .utils import get_event_handlers
 
 class Event(object):
 
-    def __init__(self, name, instance=None, input=None, propagate=True,
-                 **cargo):
+    def __init__(self, name, input=None, propagate=True,
+                 raise_invalid_transition=False, **cargo):
         self.name = name
-        self.instance = instance
         self.input = input
         self.propagate = propagate
+        self.raise_invalid_transition = raise_invalid_transition
         self.cargo = cargo
 
     def __repr__(self):
@@ -34,14 +34,14 @@ class State(object):
         self.on_enter = on_enter or self.__class__.on_enter
         self.on_exit = on_exit or self.__class__.on_exit
 
-    def _on(self, event):
+    def _on(self, event, instance):
         if event.name in self.handlers:
-            self.handlers[event.name](self, event)
+            self.handlers[event.name](self, event, instance)
 
-    def on_enter(self, event, from_state):
+    def on_enter(self, event, instance, from_state):
         pass
 
-    def on_exit(self, event, to_state):
+    def on_exit(self, event, instance, to_state):
         pass
 
     def __repr__(self):
@@ -64,13 +64,12 @@ class Machine(object):
     def _create_state(self, name, *args, **kwargs):
         return self.StateClass(name, *args, **kwargs)
 
-    def _get_transition(self, state, event):
+    def _get_transition(self, state, event, instance):
         transitions = self.transitions[(state.name, event.name)]
-        if not transitions:
+        if not transitions and event.raise_invalid_transition:
             raise InvalidTransition('{} cannot handle event {}'.format(
                 state, event
             ))
-        instance = event.instance
         for transition in transitions:
             for cond, target in transition['conditions']:
                 if isinstance(cond, list):
@@ -80,20 +79,20 @@ class Machine(object):
                 else:
                     predicate = cond
                 if callable(predicate):
-                    predicate = predicate(state, event)
+                    predicate = predicate(state, event, instance)
                 if predicate != target:
                     break
             else:
                 return transition
         return None
 
-    def _enter_state(self, state, from_state, event):
-        state.on_enter(state, event, from_state)
-        event.instance.state = state.name
+    def _enter_state(self, state, event, instance, from_state):
+        state.on_enter(state, event, instance, from_state)
+        instance.state = state.name
 
-    def _exit_state(self, state, to_state, event):
-        state.on_exit(state, event, to_state)
-        event.instance.state = None
+    def _exit_state(self, state, event, instance, to_state):
+        state.on_exit(state, event, instance, to_state)
+        instance.state = None
 
     def _init_instance(self, instance):
         '''Initialize states in the state machine.
@@ -106,7 +105,7 @@ class Machine(object):
         '''
         state = self.get_state(self.initial)
         instance.state = state.name
-        state.on_enter(state, Event('initialize'), None)
+        state.on_enter(state, Event('initialize'), instance, None)
 
     def _reset(self):
         self.initial = None
@@ -145,7 +144,9 @@ class Machine(object):
         else:
             conditions = []
         if from_state == '*' and event == '__switch__':
-            conditions.append(lambda state, event: event.input == to_state)
+            conditions.append(
+                lambda state, event, instance: event.input == to_state
+            )
         for cond in conditions:
             if isinstance(cond, string_types):
                 if cond.startswith('!'):
@@ -283,7 +284,7 @@ class Machine(object):
     def reinit_instance(self, instance):
         state = self.get_state(self.initial)
         instance.state = state.name
-        state._on(Event('reinit', instance))
+        state._on(Event('reinit'), instance)
 
     def __repr__(self):
         return '<Machine: {}, states: {}>'.format(

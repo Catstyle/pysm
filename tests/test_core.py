@@ -92,7 +92,7 @@ class TestCore(TestCase):
     def test_dispatch(self):
         mock = MagicMock()
 
-        def callback(state, event):
+        def callback(state, event, instance):
             mock()
 
         state = State('State1')
@@ -136,7 +136,7 @@ class TestCore(TestCase):
     def test_enter_exit_state(self):
         mock = MagicMock()
 
-        def callback(state, event, other_state):
+        def callback(state, event, instance, other_state):
             mock()
         states = [
             'A', 'B',
@@ -173,6 +173,6 @@ class TestCore(TestCase):
         dispatch(s, Event('drink'))
         self.assertEqual(s.state, 'caffeinated')
         with self.assertRaises(error.InvalidTransition):
-            dispatch(s, Event('stop'))
+            dispatch(s, Event('stop', raise_invalid_transition=True))
         dispatch(s, Event('relax'))
         self.assertEqual(s.state, 'standing')

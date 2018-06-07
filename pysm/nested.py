@@ -18,11 +18,11 @@ class NestedState(State):
         self.children = {}
         self.initial = initial
 
-    def _on(self, event):
+    def _on(self, event, instance):
         if event.name in self.handlers:
-            self.handlers[event.name](self, event)
+            self.handlers[event.name](self, event, instance)
         if self.parent and event.propagate:
-            self.parent._on(event)
+            self.parent._on(event, instance)
 
     def __repr__(self):
         return '<NestedState {}, handlers={}>'.format(
@@ -35,8 +35,7 @@ class NestedMachine(Machine):
     StateClass = NestedState
     STACK_SIZE = 32
 
-    def _get_transition(self, state, event):
-        instance = event.instance
+    def _get_transition(self, state, event, instance):
         target = state
         while 1:
             transitions = self.transitions[(target.name, event.name)]
@@ -56,7 +55,7 @@ class NestedMachine(Machine):
                 else:
                     predicate = cond
                 if callable(predicate):
-                    predicate = predicate(state, event)
+                    predicate = predicate(state, event, instance)
                 if predicate != target:
                     break
             else:
@@ -82,8 +81,8 @@ class NestedMachine(Machine):
                 break
         return top
 
-    def _enter_state(self, state, from_state, event):
-        event.instance.state = state.name
+    def _enter_state(self, state, event, instance, from_state):
+        instance.state = state.name
         top_state = event.cargo.get('top_state') or \
             self._get_top_state(state, from_state)
         path = [state]
@@ -91,15 +90,15 @@ class NestedMachine(Machine):
             path.append(state.parent)
             state = state.parent
         for state in reversed(path):
-            state.on_enter(state, event, from_state)
+            state.on_enter(state, event, instance, from_state)
 
-    def _exit_state(self, state, to_state, event):
-        state.on_exit(state, event, to_state)
+    def _exit_state(self, state, event, instance, to_state):
+        state.on_exit(state, event, instance, to_state)
         top_state = self._get_top_state(state, to_state)
         while state.parent and state.parent != top_state:
             state = state.parent
-            state.on_exit(state, event, to_state)
-        event.instance.state = None
+            state.on_exit(state, event, instance, to_state)
+        instance.state = None
         event.cargo['top_state'] = top_state
 
     def traverse(self, states, parent=None, remap={}):

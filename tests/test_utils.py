@@ -34,7 +34,7 @@ class TestUtils(TestCase):
 
         s = Stuff()
         with self.assertRaises(error.InvalidTransition):
-            dispatch(s, Event('run'))
+            dispatch(s, Event('run', raise_invalid_transition=True))
 
         dispatch(s, Event('__switch__', input='B'))
         self.assertEqual(s.state, 'B')

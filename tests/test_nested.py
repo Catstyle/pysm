@@ -99,11 +99,11 @@ class TestNested(TestCase):
     def test_dispatch(self):
         mock = MagicMock()
 
-        def callback(state, event):
+        def callback(state, event, instance):
             mock()
 
-        def master(state, event):
-            return event.instance.is_manager
+        def master(state, event, instance):
+            return instance.is_manager
 
         state = NestedState('A')
         state.handlers['advance'] = callback
@@ -149,7 +149,7 @@ class TestNested(TestCase):
     def test_enter_exit_nested_state(self):
         mock = MagicMock()
 
-        def callback(state, event, other_state):
+        def callback(state, event, instance, other_state):
             mock()
         states = [
             'A', 'B',
@@ -193,6 +193,6 @@ class TestNested(TestCase):
         dispatch(s, Event('walk'))
         self.assertEqual(s.state, 'caffeinated.running')
         with self.assertRaises(error.InvalidTransition):
-            dispatch(s, Event('stop'))
+            dispatch(s, Event('stop', raise_invalid_transition=True))
         dispatch(s, Event('relax'))
         self.assertEqual(s.state, 'standing')

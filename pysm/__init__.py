@@ -32,11 +32,11 @@ Goals:
 
 from .core import State, Machine, Event, state_machine
 from .nested import NestedState, NestedMachine
-from .utils import on_event, add_state, add_states
+from .utils import on_event, add_state, add_states, dispatch
 
 
 __all__ = [
-    'state_machine', 'add_states', 'add_state', 'on_event',
+    'state_machine', 'add_states', 'add_state', 'on_event', 'dispatch',
     'State', 'Machine', 'Event', 'NestedState', 'NestedMachine',
 ]
 
